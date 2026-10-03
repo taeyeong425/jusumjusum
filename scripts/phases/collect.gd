@@ -10,6 +10,7 @@ const HOLD_MAX := 12
 const REACH := 3.6
 const AIM_DEG := 20.0
 const PEEK_R := 7.0
+const TEAR_TIME := 0.5     # 뜯는 시간 배율 (v0.3.2: 절반으로)
 const L_WORLD := 1
 const L_ITEM := 2
 const L_CHAR := 4
@@ -79,6 +80,8 @@ func _ready() -> void:
 	for part in Game.target["parts"]:
 		wanted[Data.GROUPS[part[0]][0]] = 3
 	_build_hud()
+	if not OS.has_feature("web") and not Game.autotest and DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # 웹은 첫 클릭에서 (브라우저 규칙)
 
 
 func _exit_tree() -> void:
@@ -1180,7 +1183,7 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		return
 	# 뜯기: 도착하면 알아서 끝까지 (손 뗄 필요 없음)
 	body.rotation.y = lerp_angle(body.rotation.y, atan2(-((act["node"] as Node3D).global_position.x - body.position.x), -((act["node"] as Node3D).global_position.z - body.position.z)), 0.3)
-	hold_prog += delta / act["hold"]
+	hold_prog += delta / (act["hold"] * TEAR_TIME)
 	tick_t -= delta
 	if tick_t <= 0:
 		tick_t = 0.3
@@ -1233,14 +1236,23 @@ func _fly(src: Node3D, a: Dictionary) -> void:
 	tw.chain().tween_callback(pc.queue_free)
 
 
-## 손 + 원형 게이지. 뜯는 동안: 캐릭터에서 팔이 쭉 뻗어 대상을 움켜쥐고, 게이지가 한 바퀴 돌면 쏙.
+## 손 + 원형 게이지. 뜯는 동안: 손이 대상을 움켜쥐고 캐릭터 쪽으로 당기며, 게이지가 한 바퀴 돌면 쏙.
 ## 커서가 집을 수 있는 것 위에 있으면 커서 옆에 편 손.
 func _draw_fx() -> void:
-	var mouse := fx.get_local_mouse_position()
+	var mouse := _aim_pos()
 	var tearing := not act.is_empty() and hold_prog > 0.0 and is_instance_valid(act["node"])
+	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	if looking:
+		var on: bool = not aim.is_empty() and not aim.get("bolted", false)
+		fx.draw_circle(mouse, 3.5, Color(1, 1, 1, 0.95))
+		fx.draw_arc(mouse, 11.0, 0, TAU, 24, Color(UI.ACCENT if on else Color.WHITE, 0.9), 2.5)
+		fx.draw_arc(mouse, 12.5, 0, TAU, 24, Color(UI.INK, 0.35), 1.0)
+	else:
+		var vs := fx.size
+		fx.draw_string(Data.font_bold, Vector2(0, vs.y * 0.42), "화면을 클릭하면 마우스로 시점을 돌려요  (Esc = 커서 풀기)", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 26, Color(UI.INK, 0.85))
 	if not tearing:
 		if not aim.is_empty() and not aim.get("bolted", false):
-			_draw_hand(mouse + Vector2(26, 30), 0.85, 0.0, 0.0)
+			_draw_hand(mouse + Vector2(28, 30), 0.85, 0.0, 0.0)
 		return
 	var wp: Vector3 = (act["node"] as Node3D).global_position
 	if cam.is_position_behind(wp):
@@ -1258,10 +1270,6 @@ func _draw_fx() -> void:
 	var skin := Color("#F6D2B0")
 	var ink := Color(UI.INK, 0.9)
 	var wob := Vector2(sin(Time.get_ticks_msec() * 0.04), cos(Time.get_ticks_msec() * 0.05)) * 2.5 * g
-	fx.draw_line(me, hc + wob, ink, 13.0)
-	fx.draw_line(me, hc + wob, skin, 9.0)
-	fx.draw_circle(me, 6.5, ink)
-	fx.draw_circle(me, 4.5, skin)
 	var ang := (hc - me).angle() + PI / 2
 	_draw_hand(hc + wob, 2.1, clampf(g * 1.4, 0.0, 1.0), ang)
 
@@ -1311,7 +1319,7 @@ func _draw_hand(at: Vector2, s: float, grip: float, rot: float) -> void:
 ## 마우스 커서 아래 있는 것 (커서는 늘 자유롭게 움직인다)
 func _update_aim() -> void:
 	var best: Dictionary = {}
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := _aim_pos()
 	var from := cam.project_ray_origin(mouse)
 	var q := PhysicsRayQueryParameters3D.create(from, from + cam.project_ray_normal(mouse) * 70.0, L_ITEM)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
@@ -1351,10 +1359,17 @@ func _update_aim() -> void:
 		hud_prompt.text = "%s줍기 — %s (%s)" % [verb, target["item"]["name"], Data.palette()[target["item"]["color"]]["name"]]
 
 
+## 조준점: 시점 조작 중이면 화면 가운데, 커서를 풀었으면 커서
+func _aim_pos() -> Vector2:
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		return get_viewport().get_visible_rect().size * 0.5
+	return get_viewport().get_mouse_position()
+
+
 ## 레이가 빗나갔을 때: 커서에서 화면상 40px 안, 가장 가까운 집을 수 있는 것
 func _near_cursor(mouse: Vector2) -> Dictionary:
 	var best: Dictionary = {}
-	var bd := 40.0
+	var bd := 48.0
 	var me: Vector3 = actors[0]["body"].global_position
 	for list in [ground, tears]:
 		for e in list:
@@ -1423,7 +1438,7 @@ func _bot_step(a: Dictionary, delta: float) -> void:
 		_take_ground(a, goal["ref"])
 		a["goal"] = {}
 	else:
-		a["prog"] += delta / goal["ref"]["hold"]
+		a["prog"] += delta / (goal["ref"]["hold"] * TEAR_TIME)
 		if a["prog"] >= 1.0:
 			_finish_tear(a, goal["ref"])
 			a["goal"] = {}
@@ -1480,14 +1495,14 @@ func _build_camera() -> void:
 	cam_pivot.add_child(spring)
 	cam = Camera3D.new()
 	cam.fov = 62
-	cam.position = Vector3(0.7, 0, 0)
+	cam.position = Vector3(1.15, 0, 0)   # 어깨 너머 — 조준점이 머리에 안 겹치게
 	spring.add_child(cam)
 	spring.add_excluded_object(actors[0]["body"].get_rid())
 
 
 func _update_camera() -> void:
 	var body: CharacterBody3D = actors[0]["body"]
-	var target := body.global_position + Vector3(0, 1.75, 0)
+	var target := body.global_position + Vector3(0, 2.15, 0)
 	cam_pivot.global_position = cam_pivot.global_position.lerp(target, 0.35) if cam_pivot.global_position.distance_to(target) < 6 else target
 	cam_pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
 	spring.spring_length = lerpf(spring.spring_length, zoom, 0.2)
@@ -1503,13 +1518,17 @@ func _update_visibility() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if finished:
 		return
-	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_RIGHT):
-		cam_yaw -= event.relative.x * 0.006
-		cam_pitch = clampf(cam_pitch - event.relative.y * 0.005, -1.25, 0.35)
+	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	if event is InputEventMouseMotion and (looking or (event.button_mask & MOUSE_BUTTON_MASK_RIGHT)):
+		cam_yaw -= event.relative.x * 0.0042
+		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0036, -1.25, 0.35)
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				_try_pick()
+				if looking:
+					_try_pick()
+				else:
+					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # 첫 클릭은 시점 조작 시작
 			MOUSE_BUTTON_WHEEL_UP:
 				zoom = clampf(zoom - 0.6, 3.0, 11.0)
 			MOUSE_BUTTON_WHEEL_DOWN:
@@ -1517,6 +1536,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_SPACE: jump_req = true
+			KEY_ESCAPE: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE   # 커서 풀기 (핫바 · 버튼 누를 때)
 			KEY_E: _try_pick()
 			KEY_Q: _drop_selected()
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
@@ -1595,7 +1615,7 @@ func _build_hud() -> void:
 		cell.gui_input.connect(func(ev): _slot_input(ev, idx))
 		hotbar.add_child(cell)
 		hot_slots.append(cell)
-	var help := UI.label("클릭: 가서 줍기·뜯기 · WASD 이동 · 우클릭 끌기: 시점 · 휠: 줌 · Space 점프 · 숫자: 칸 고르기 · [Q] 버리기", 16, UI.SOFT)
+	var help := UI.label("마우스: 시점 · 클릭: 가운데 조준점의 것 줍기·뜯기 · WASD 이동 · 휠: 줌 · Space 점프 · 숫자: 칸 · [Q] 버리기 · Esc: 커서 풀기", 16, UI.SOFT)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(help)
 	layer.add_child(bar)
