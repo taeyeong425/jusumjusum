@@ -1,15 +1,15 @@
 class_name UI
 extends RefCounted
-## UI 헬퍼. 톤: 크림 바탕 · 갈색 잉크 · 손글씨 (§13.1 방과후 교실)
+## UI 헬퍼. 톤: 레고 — 흰 플라스틱 판 · 노란 브릭 버튼(아래 두께) · 손글씨
 
 const BG := Color("#F6EEDD")
 const PAPER := Color("#FFF8EC")
-const INK := Color("#3B3024")
-const SOFT := Color("#7A6A55")
-const ACCENT := Color("#E07A5F")
-const GOOD := Color("#3E8E5B")
-const BAD := Color("#C0392B")
-const CHALK := Color("#2F4A3A")
+const INK := Color("#1B2A34")
+const SOFT := Color("#56636D")
+const ACCENT := Color("#D6402B")
+const GOOD := Color("#237841")
+const BAD := Color("#C91A09")
+const CHALK := Color("#123A6B")
 
 
 static func theme() -> Theme:
@@ -20,33 +20,41 @@ static func theme() -> Theme:
 	t.set_color("font_color", "Label", INK)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(12)
-		sb.content_margin_left = 14
-		sb.content_margin_right = 14
+		# 노란 브릭: 아래쪽 테두리를 두껍게 = 플라스틱 두께. 누르면 두께가 줄며 내려앉는다
+		sb.set_corner_radius_all(10)
+		sb.content_margin_left = 16
+		sb.content_margin_right = 16
 		sb.content_margin_top = 6
-		sb.content_margin_bottom = 6
+		sb.content_margin_bottom = 4
+		sb.border_color = Color("#B88A12")
+		sb.set_border_width_all(2)
+		sb.border_width_bottom = 6
 		match state:
-			"normal": sb.bg_color = Color("#FBE3C9")
-			"hover": sb.bg_color = Color("#F7CFA6")
-			"pressed": sb.bg_color = Color("#EDB27F")
-			"disabled": sb.bg_color = Color("#E8E1D6")
+			"normal": sb.bg_color = Color("#F2CD37")
+			"hover": sb.bg_color = Color("#FFDB4D")
+			"pressed":
+				sb.bg_color = Color("#E3BA22")
+				sb.border_width_bottom = 2
+				sb.content_margin_top = 10
+			"disabled":
+				sb.bg_color = Color("#E2E4E6")
+				sb.border_color = Color("#B9BEC2")
 			"focus":
 				sb.bg_color = Color(0, 0, 0, 0)
 				sb.border_color = ACCENT
 				sb.set_border_width_all(2)
-		if state != "focus":
-			sb.border_color = Color("#C9A27A")
-			sb.set_border_width_all(2)
 		t.set_stylebox(state, "Button", sb)
 	t.set_color("font_color", "Button", INK)
 	t.set_color("font_hover_color", "Button", INK)
 	t.set_color("font_pressed_color", "Button", INK)
-	t.set_color("font_disabled_color", "Button", Color("#A89C8C"))
+	t.set_color("font_disabled_color", "Button", Color("#9AA2A8"))
+	# 흰 플라스틱 판
 	var pnl := StyleBoxFlat.new()
-	pnl.bg_color = Color(PAPER, 0.94)
-	pnl.set_corner_radius_all(16)
-	pnl.border_color = Color("#D9C3A5")
+	pnl.bg_color = Color(1, 1, 1, 0.95)
+	pnl.set_corner_radius_all(14)
+	pnl.border_color = Color("#C3C9CE")
 	pnl.set_border_width_all(2)
+	pnl.border_width_bottom = 6
 	pnl.content_margin_left = 16
 	pnl.content_margin_right = 16
 	pnl.content_margin_top = 12
@@ -324,3 +332,15 @@ static func sfx(name: String, db := 0.0) -> void:
 		var s := tree.root.get_node_or_null("Sfx")
 		if s:
 			s.play(name, db)
+
+
+## 흰 플라스틱 타일 버튼 (목록용 — 노란 브릭 버튼이 줄줄이면 시끄럽다)
+static func tile_button(b: Button) -> void:
+	for state in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(8)
+		sb.border_color = Color("#C3C9CE")
+		sb.set_border_width_all(1)
+		sb.border_width_bottom = 4 if state != "pressed" else 1
+		sb.bg_color = {"normal": Color("#FFFFFF"), "hover": Color("#FFF6CC"), "pressed": Color("#F2E6A8")}[state]
+		b.add_theme_stylebox_override(state, sb)

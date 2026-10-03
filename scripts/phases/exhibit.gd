@@ -93,7 +93,7 @@ func _ready() -> void:
 	for k in order.size():
 		letters[order[k]] = LETTERS[k]
 	Game.set_meta("letters", letters)
-	UI.make_env(self, Color("#F2E6D0"))
+	UI.make_env(self, Color("#CFE6F2"))
 	var ped := Piece.new().setup("cylinder", 0, false)
 	ped.set_pscale(Vector3(6.2, 0.7, 6.2), false)
 	ped.position.y = -0.21
@@ -102,7 +102,7 @@ func _ready() -> void:
 	var pm := PlaneMesh.new(); pm.size = Vector2(40, 40)
 	fl.mesh = pm
 	fl.position.y = -0.42
-	fl.material_override = Data.flat_material(Color("#D8C3A0"))
+	fl.material_override = Data.brick(Color("#A0A5A9"), true, 0.25, 0.5)   # 회색 바닥판
 	add_child(fl)
 	pivot = Node3D.new()
 	add_child(pivot)

@@ -53,7 +53,7 @@ var snap_t := 0.0
 func _ready() -> void:
 	time_left = Game.t_build()
 	inventory = Game.human()["inventory"]
-	UI.make_env(self, Color("#EAD9BE"))
+	UI.make_env(self, Color("#CFE6F2"))
 	_build_room()
 	work_root = Node3D.new()
 	add_child(work_root)
@@ -76,7 +76,7 @@ func _build_room() -> void:
 	var fm := PlaneMesh.new(); fm.size = Vector2(30, 30)
 	fl.mesh = fm
 	fl.position.y = -0.9
-	fl.material_override = Data.flat_material(Color("#C8A97E"))
+	fl.material_override = Data.brick(Color("#5FAE4E"), true, 0.25, 0.55)
 	add_child(fl)
 	var top := Piece.new().setup("box", 13, false)
 	top.set_pscale(Vector3(TABLE * 2 / 0.5, 0.4, TABLE * 2 / 0.5), false)
@@ -226,6 +226,7 @@ func _refresh_tray() -> void:
 		row.custom_minimum_size = Vector2(196, 48)
 		row.focus_mode = Control.FOCUS_NONE
 		row.pressed.connect(func(): _spawn(idx))
+		UI.tile_button(row)
 		var icon := Control.new()
 		icon.custom_minimum_size = Vector2(40, 40)
 		icon.position = Vector2(6, 4)

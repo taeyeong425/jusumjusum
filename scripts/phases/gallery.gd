@@ -7,11 +7,11 @@ var span := 1.0
 
 
 func _ready() -> void:
-	UI.make_env(self, Color("#F2E6D0"))
+	UI.make_env(self, Color("#CFE6F2"))
 	var fl := MeshInstance3D.new()
 	var pm := PlaneMesh.new(); pm.size = Vector2(80, 40)
 	fl.mesh = pm
-	fl.material_override = Data.flat_material(Color("#D8C3A0"))
+	fl.material_override = Data.brick(Color("#A0A5A9"), true, 0.25, 0.5)   # 회색 바닥판
 	add_child(fl)
 	var letters: Dictionary = Game.get_meta("letters") if Game.has_meta("letters") else {}
 	var x := 0.0

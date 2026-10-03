@@ -33,7 +33,7 @@ func setup(t: String, ci: int, collide := true, shp := Vector3.ONE) -> Piece:
 	mkey = Data.mesh_key(t, shp)
 	mesh_inst.mesh = Data.mesh(mkey)
 	mesh_inst.transform = Data.base_xform(mkey)
-	mesh_inst.material_override = Data.material(ci)
+	mesh_inst.material_override = Data.material(ci, 1.0, Data.has_studs(t))
 	vis.add_child(mesh_inst)
 	if collide:
 		body = StaticBody3D.new()
@@ -72,8 +72,9 @@ func set_pscale(s: Vector3, clamp := true) -> void:
 		shape_node.shape = cs
 
 
-func _mat() -> StandardMaterial3D:
-	return Data.plain_material(color_idx) if big else Data.material(color_idx)
+func _mat() -> Material:
+	var st := Data.has_studs(type)
+	return Data.plain_material(color_idx, st) if big else Data.material(color_idx, 1.0, st)
 
 
 func set_color(ci: int) -> void:
@@ -87,10 +88,13 @@ func set_rusty() -> void:
 
 func set_highlight(on: bool) -> void:
 	if on:
-		var m: StandardMaterial3D = _mat().duplicate()
-		m.emission_enabled = true
-		m.emission = Color(1, 0.85, 0.4)
-		m.emission_energy_multiplier = 0.45
+		var m: Material = _mat().duplicate()
+		if m is ShaderMaterial:
+			(m as ShaderMaterial).set_shader_parameter("emission", Color(1, 0.85, 0.4) * 0.45)
+		else:
+			(m as StandardMaterial3D).emission_enabled = true
+			(m as StandardMaterial3D).emission = Color(1, 0.85, 0.4)
+			(m as StandardMaterial3D).emission_energy_multiplier = 0.45
 		mesh_inst.material_override = m
 	else:
 		mesh_inst.material_override = _mat()

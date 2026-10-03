@@ -80,10 +80,10 @@ static var font_bold: Font
 static func palette() -> Array:
 	if _palette.is_empty():
 		var raw := [
-			["크림", "#F3E9D2"], ["분홍", "#F2A7B5"], ["빨강", "#D9483B"], ["주황", "#F08A3C"],
-			["노랑", "#F4C84A"], ["연두", "#A8D46F"], ["초록", "#3E8E5B"], ["하늘", "#8ECAE6"],
-			["파랑", "#2F6FB5"], ["남색", "#263D6B"], ["보라", "#8E6CC4"], ["연보라", "#CDB8E8"],
-			["갈색", "#8A5A3B"], ["베이지", "#D8B98C"], ["회색", "#9A9A9A"], ["검정", "#2B2B2B"],
+			["크림", "#F2EBDC"], ["분홍", "#E8A4C4"], ["빨강", "#C91A09"], ["주황", "#FE8A18"],
+			["노랑", "#F2CD37"], ["연두", "#A5CA18"], ["초록", "#237841"], ["하늘", "#5DC2D8"],
+			["파랑", "#0055BF"], ["남색", "#0A3463"], ["보라", "#8E5AA8"], ["연보라", "#CDA4DE"],
+			["갈색", "#6B3A1E"], ["베이지", "#E4CD9E"], ["회색", "#A0A5A9"], ["검정", "#1B2A34"],
 		]
 		for r in raw:
 			_palette.append({"name": r[0], "color": Color(r[1])})
@@ -318,10 +318,16 @@ static func collision_points(t: String) -> PackedVector3Array:
 	return out
 
 
-static func material(ci: int, alpha := 1.0) -> StandardMaterial3D:
-	var key := "%d_%.2f" % [ci, alpha]
+## 덩어리 재질 — 레고 같은 반짝이는 플라스틱. studs = 윗면 스터드 (각진 것 · 원기둥)
+static func material(ci: int, alpha := 1.0, studs := true) -> Material:
+	var key := "%d_%.2f_%s" % [ci, alpha, studs]
 	if _mats.has(key):
 		return _mats[key]
+	if alpha >= 1.0:
+		var bm := brick(color(ci), studs)
+		bm.next_pass = outline_material()
+		_mats[key] = bm
+		return bm
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color(ci)
 	m.roughness = 0.85
@@ -334,11 +340,30 @@ static func material(ci: int, alpha := 1.0) -> StandardMaterial3D:
 	return m
 
 
+static var _brick_shader: Shader
+## 브릭 셰이더 재질 (바닥판 · 덩어리 공용)
+static func brick(c: Color, studs := true, pitch := 0.25, gloss := 0.3) -> ShaderMaterial:
+	if _brick_shader == null:
+		_brick_shader = load("res://assets/shaders/brick.gdshader")
+	var m := ShaderMaterial.new()
+	m.shader = _brick_shader
+	m.set_shader_parameter("albedo", c)
+	m.set_shader_parameter("studs", 1.0 if studs else 0.0)
+	m.set_shader_parameter("pitch", pitch)
+	m.set_shader_parameter("gloss", gloss)
+	return m
+
+
+## 윗면에 스터드가 있는 종류 (레고 브릭 · 플레이트 · 둥근 브릭)
+static func has_studs(t: String) -> bool:
+	return t in ["box", "plate", "rod", "cylinder"]
+
+
 static func flat_material(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
-	m.roughness = 0.9
-	m.metallic_specular = 0.15
+	m.roughness = 0.45
+	m.metallic_specular = 0.5
 	return m
 
 
@@ -550,7 +575,7 @@ static func outline_material() -> StandardMaterial3D:
 		_outline.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_outline.cull_mode = BaseMaterial3D.CULL_FRONT
 		_outline.grow = true
-		_outline.grow_amount = 0.012
+		_outline.grow_amount = 0.008
 		_outline.albedo_color = Color("#3B3024")
 	return _outline
 
@@ -568,9 +593,10 @@ static func rust_material() -> StandardMaterial3D:
 
 static var _plain := {}
 ## 외곽선 없는 같은 색 재질 (아주 크게 키운 덩어리용)
-static func plain_material(ci: int) -> StandardMaterial3D:
-	if not _plain.has(ci):
-		var m: StandardMaterial3D = material(ci).duplicate()
+static func plain_material(ci: int, studs := true) -> Material:
+	var key := "%d_%s" % [ci, studs]
+	if not _plain.has(key):
+		var m: Material = material(ci, 1.0, studs).duplicate()
 		m.next_pass = null
-		_plain[ci] = m
-	return _plain[ci]
+		_plain[key] = m
+	return _plain[key]

@@ -183,6 +183,26 @@ func _to_gallery() -> void:
 	Game.goto("gallery")
 
 
+## 막대 = 브릭을 쌓은 탑 (0.5점 = 브릭 한 칸, 맨 위에 스터드)
+func _brick_tower(r: Rect2, col: Color, step: float) -> void:
+	if r.size.y <= 0.5:
+		return
+	var y := r.end.y
+	var k := 0
+	while y > r.position.y + 0.5:
+		var h := minf(step, y - r.position.y)
+		var br := Rect2(r.position.x, y - h, r.size.x, h)
+		chart.draw_rect(br, col.darkened(0.04 * (k % 2)))
+		chart.draw_rect(Rect2(br.position.x, br.end.y - 3, br.size.x, 3), col.darkened(0.25))
+		y -= h
+		k += 1
+	var n := maxi(2, int(r.size.x / 26))
+	for s in n:
+		var cx := r.position.x + r.size.x * (s + 0.5) / n
+		chart.draw_rect(Rect2(cx - 8, r.position.y - 6, 16, 6), col.lightened(0.12))
+		chart.draw_rect(Rect2(cx - 8, r.position.y - 6, 16, 6), col.darkened(0.25), false, 1.0)
+
+
 func _draw_chart() -> void:
 	var avg: Array = result["avg"]
 	var sz := chart.size
@@ -202,10 +222,10 @@ func _draw_chart() -> void:
 		var x := k * slot + slot * 0.19
 		var hgt: float = avg[i] * scale_y * grow
 		var passed: bool = avg[i] >= verdict["th"] - 0.0001
-		var col := Color("#BFE3A0") if passed else Color("#E8E1D6")
+		var col := Color("#4B9F4A") if passed else Color("#A0A5A9")
 		if i == 0:
-			col = Color("#F4C84A") if passed else Color("#E6C88A")
-		chart.draw_rect(Rect2(x, base_y - hgt, bw, hgt), col)
+			col = Color("#F2CD37") if passed else Color("#E4CD9E")
+		_brick_tower(Rect2(x, base_y - hgt, bw, hgt), col, scale_y * 0.5)
 		var nm: String = "내 것" if i == 0 else letters.get(i, "?")
 		chart.draw_string(font, Vector2(x, base_y + 30), nm, HORIZONTAL_ALIGNMENT_CENTER, bw, 26, Color("#F4F1E6"))
 		chart.draw_string(font, Vector2(x, base_y - hgt - 8), "★%.1f" % avg[i], HORIZONTAL_ALIGNMENT_CENTER, bw, 24, Color("#F4F1E6"))

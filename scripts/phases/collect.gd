@@ -11,6 +11,7 @@ const REACH := 3.6
 const AIM_DEG := 20.0
 const PEEK_R := 7.0
 const TEAR_TIME := 0.5     # 뜯는 시간 배율 (v0.3.2: 절반으로)
+const RUST := false        # 녹슨 부품 (편성 비율만큼만 뜯기) — 꺼 둠
 const L_WORLD := 1
 const L_ITEM := 2
 const L_CHAR := 4
@@ -51,6 +52,10 @@ var hud_prompt: Label
 var hud_bar: ProgressBar
 var fx: Control                  # 손 + 원형 게이지
 var sim_move := Vector2.ZERO      # 시나리오 테스트용 입력
+var bag_panel: PanelContainer
+var bag_list: VBoxContainer
+var bag_open := false
+var bag_t := 0.0
 var hotbar: HBoxContainer
 var hot_slots: Array = []
 var minimap: Control
@@ -75,6 +80,7 @@ func _ready() -> void:
 	_spawn_ground_items()
 	_spawn_actors()
 	_build_camera()
+	_build_nav()
 	for t in BotBuilder.wanted_types(Game.target):
 		wanted[t] = 1
 	for part in Game.target["parts"]:
@@ -132,6 +138,7 @@ func _assemble(root: Node3D, parts: Array) -> void:
 			var hold: float = float(p[7]) if p.size() > 7 else 1.6
 			if root is AnimatableBody3D:
 				hold = maxf(0.6, hold * 0.35)   # 움직이는 차·기차 부품은 쫓아가서 잠깐 잡으면 된다
+				pc.set_meta("moving", true)
 			var e := {"node": pc, "item": item, "hold": hold,
 				"name": tear_name, "alive": true, "bolted": false, "dig": false, "uses": 1}
 			pc.set_meta("entry", e)
@@ -297,7 +304,7 @@ func _build_ground() -> void:
 	pm.size = Vector2(140, 140)
 	outer.mesh = pm
 	outer.position.y = -0.02
-	outer.material_override = Data.flat_material(Color("#7FB069"))
+	outer.material_override = Data.brick(Color("#3F8C3C"), true, 0.25, 0.6)   # 바깥 = 진한 초록 바닥판
 	world.add_child(outer)
 	# 울타리 안쪽 잔디 (불규칙한 다각형)
 	var st := SurfaceTool.new()
@@ -310,7 +317,7 @@ func _build_ground() -> void:
 			st.add_vertex(Vector3(v.x, 0.0, v.y))
 	var lawn := MeshInstance3D.new()
 	lawn.mesh = st.commit()
-	lawn.material_override = Data.flat_material(Color("#A9CF8E"))
+	lawn.material_override = Data.brick(Color("#5FAE4E"), true, 0.25, 0.55)   # 놀이터 = 초록 바닥판(스터드)
 	world.add_child(lawn)
 	var floor_body := StaticBody3D.new()
 	floor_body.collision_layer = L_WORLD
@@ -322,9 +329,9 @@ func _build_ground() -> void:
 	floor_body.add_child(fcs)
 	world.add_child(floor_body)
 	# 도로 · 레일 · 침목
-	_strip_mesh(road_path, 3.4, 0.015, Color("#8E8A86"))
+	_strip_mesh(road_path, 3.4, 0.015, Color("#6C6E68"))   # 도로 = 매끈한 회색 타일
 	_strip_mesh(road_path, 0.12, 0.02, Color("#F3E9D2"))
-	_strip_mesh(rail_path, 2.0, 0.012, Color("#C8B79A"))
+	_strip_mesh(rail_path, 2.0, 0.012, Color("#A0A5A9"))
 	_strip_mesh(rail_path, 0.12, 0.05, Color("#5A5A5A"), -0.55)
 	_strip_mesh(rail_path, 0.12, 0.05, Color("#5A5A5A"), 0.55)
 	var sl := SurfaceTool.new()
@@ -345,7 +352,7 @@ func _build_ground() -> void:
 				sl.add_vertex(Vector3(v.x, 0.03, v.z))
 	var sleepers := MeshInstance3D.new()
 	sleepers.mesh = sl.commit()
-	sleepers.material_override = Data.flat_material(Color("#8A5A3B"))
+	sleepers.material_override = Data.flat_material(Color("#6B3A1E"))
 	world.add_child(sleepers)
 	# 모래밭
 	var sand := Piece.new().setup("cylinder", 13, false, Vector3(1, 1, 1))
@@ -789,7 +796,11 @@ func _move_vehicle(v: Dictionary, delta: float) -> void:
 
 ## 편성에 비례해 녹슨다. 그 종류가 평균(1인당 2개)보다 귀한 만큼 그 종류 부품이 녹슬어서 안 빠진다.
 ## 풍족 판이면 거의 다 빠지고, 곡면 기근이면 둥근 부품 대부분이 녹슨다 — 편성이 맵에서 보인다.
+## v0.4: 녹슨 부품(못 떼는 부품) 개념은 일단 뺐다 — 편성은 바닥 덩어리 · 모래밭에만 반영. 되살리려면 RUST = true
 func _claim_formation() -> void:
+	if not RUST:
+		Game.set_meta("ground_left", Game.counts.duplicate())
+		return
 	var avg := float(Game.PLAYERS * 24) / Data.TYPES.size()
 	var by_type := {}
 	for tr in tears:
@@ -880,36 +891,46 @@ func _add_ground(item: Dictionary, p: Vector3) -> void:
 # ── 캐릭터 (덩어리로 지은 아이 · 동물) ─────────────────
 
 func _character(i: int) -> Node3D:
+	# 미니피겨: 다리 · 골반 · 몸통 · 팔 · 손 · 노란 원통 머리 + 머리 위 스터드. 동물 친구는 귀 · 부리로 구분
 	var p: Dictionary = Game.players[i]
 	var c: int = p["color"]
 	var root := Node3D.new()
+	var skin := 4
 	var parts := [
-		["capsule", 2, c, Vector3(0, 0.62, 0), Vector3.ZERO, 1.25],
-		["sphere", 0, c if i != 0 else 0, Vector3(0, 1.42, 0), Vector3.ZERO, 1.05],
-		["sphere", 0, 15, Vector3(-0.13, 1.48, -0.29), Vector3.ZERO, 0.13],
-		["sphere", 0, 15, Vector3(0.13, 1.48, -0.29), Vector3.ZERO, 0.13],
+		["box", Vector3(0.52, 1.2, 0.64), 9, Vector3(-0.14, 0.3, 0), Vector3.ZERO, 1.0],
+		["box", Vector3(0.52, 1.2, 0.64), 9, Vector3(0.14, 0.3, 0), Vector3.ZERO, 1.0],
+		["box", Vector3(1.12, 0.24, 0.64), 15, Vector3(0, 0.66, 0), Vector3.ZERO, 1.0],
+		["box", Vector3(1.2, 1.12, 0.68), c, Vector3(0, 1.02, 0), Vector3.ZERO, 1.0],
+		["capsule", Vector3(0.8, 0.85, 0.8), c, Vector3(-0.38, 1.02, 0), Vector3(0, 0, -12), 1.0],
+		["capsule", Vector3(0.8, 0.85, 0.8), c, Vector3(0.38, 1.02, 0), Vector3(0, 0, 12), 1.0],
+		["cylinder", Vector3(0.36, 0.25, 0.36), skin, Vector3(-0.43, 0.74, -0.04), Vector3.ZERO, 1.0],
+		["cylinder", Vector3(0.36, 0.25, 0.36), skin, Vector3(0.43, 0.74, -0.04), Vector3.ZERO, 1.0],
+		["cylinder", Vector3(0.5, 0.1, 0.5), skin, Vector3(0, 1.33, 0), Vector3.ZERO, 1.0],
+		["cylinder", Vector3(0.88, 0.72, 0.88), skin, Vector3(0, 1.53, 0), Vector3.ZERO, 1.0],
+		["cylinder", Vector3(0.48, 0.2, 0.48), skin, Vector3(0, 1.78, 0), Vector3.ZERO, 1.0],
+		["sphere", 0, 15, Vector3(-0.08, 1.57, -0.215), Vector3.ZERO, 0.1],
+		["sphere", 0, 15, Vector3(0.08, 1.57, -0.215), Vector3.ZERO, 0.1],
+		["box", Vector3(0.28, 0.06, 0.04), 15, Vector3(0, 1.47, -0.22), Vector3.ZERO, 1.0],
 	]
 	match p["name"]:
 		"나":
-			parts.append(["hemi", 0, 8, Vector3(0, 1.62, 0.02), Vector3.ZERO, 1.08])
-			parts.append(["plate", 0, 8, Vector3(0, 1.66, -0.28), Vector3.ZERO, 0.55])
+			parts.append(["hemi", Vector3(0.82, 0.62, 0.82), 8, Vector3(0, 1.8, 0.01), Vector3.ZERO, 1.0])
+			parts.append(["plate", Vector3(0.45, 0.6, 0.5), 8, Vector3(0, 1.77, -0.25), Vector3.ZERO, 1.0])
 		"곰돌이":
-			parts.append(["hemi", 0, 12, Vector3(-0.24, 1.72, 0), Vector3.ZERO, 0.42])
-			parts.append(["hemi", 0, 12, Vector3(0.24, 1.72, 0), Vector3.ZERO, 0.42])
-			parts.append(["sphere", 0, 13, Vector3(0, 1.34, -0.3), Vector3.ZERO, 0.38])
+			parts.append(["sphere", 0, 12, Vector3(-0.17, 1.8, 0), Vector3.ZERO, 0.32])
+			parts.append(["sphere", 0, 12, Vector3(0.17, 1.8, 0), Vector3.ZERO, 0.32])
 		"토끼":
-			parts.append(["capsule", 1, c, Vector3(-0.14, 1.95, 0), Vector3(0, 0, 8), 0.75])
-			parts.append(["capsule", 1, c, Vector3(0.14, 1.95, 0), Vector3(0, 0, -8), 0.75])
+			parts.append(["capsule", Vector3(0.6, 0.8, 0.6), 1, Vector3(-0.1, 1.98, 0), Vector3(0, 0, 8), 1.0])
+			parts.append(["capsule", Vector3(0.6, 0.8, 0.6), 1, Vector3(0.1, 1.98, 0), Vector3(0, 0, -8), 1.0])
 		"펭귄":
-			parts.append(["hemi", 2, 0, Vector3(0, 0.72, -0.2), Vector3(-90, 0, 0), 0.8])
-			parts.append(["cone", 1, 3, Vector3(0, 1.36, -0.36), Vector3(-90, 0, 0), 0.3])
+			parts.append(["hemi", Vector3(0.82, 0.62, 0.82), 15, Vector3(0, 1.8, 0.01), Vector3.ZERO, 1.0])
+			parts.append(["cone", Vector3(0.3, 0.3, 0.3), 3, Vector3(0, 1.52, -0.26), Vector3(-90, 0, 0), 1.0])
 		"여우":
-			parts.append(["cone", 1, c, Vector3(-0.2, 1.82, 0), Vector3(0, 0, 12), 0.45])
-			parts.append(["cone", 1, c, Vector3(0.2, 1.82, 0), Vector3(0, 0, -12), 0.45])
-			parts.append(["cone", 1, 0, Vector3(0, 1.36, -0.36), Vector3(-90, 0, 0), 0.35])
+			parts.append(["cone", Vector3(0.45, 0.5, 0.45), 3, Vector3(-0.13, 1.88, 0), Vector3(0, 0, 12), 1.0])
+			parts.append(["cone", Vector3(0.45, 0.5, 0.45), 3, Vector3(0.13, 1.88, 0), Vector3(0, 0, -12), 1.0])
 		"고양이":
-			parts.append(["cone", 0, c, Vector3(-0.2, 1.78, 0), Vector3(0, 0, 14), 0.35])
-			parts.append(["cone", 0, c, Vector3(0.2, 1.78, 0), Vector3(0, 0, -14), 0.35])
+			parts.append(["cone", Vector3(0.4, 0.4, 0.4), 14, Vector3(-0.13, 1.86, 0), Vector3(0, 0, 14), 1.0])
+			parts.append(["cone", Vector3(0.4, 0.4, 0.4), 14, Vector3(0.13, 1.86, 0), Vector3(0, 0, -14), 1.0])
 	for q in parts:
 		var shp := _shape_of(q[0], q[1])
 		var pc := Piece.new().setup(q[0], q[2], false, shp)
@@ -965,8 +986,16 @@ func _give(a: Dictionary, item: Dictionary) -> void:
 		var how: String = {"tear": "뜯었다", "dig": "팠다"}.get(item["origin"], "주웠다")
 		_toast("%s %s!  (%d/%d)" % [item["name"], how, _inv(a).size(), HOLD_MAX])
 		_pop("+1 " + item["name"], a["body"].global_position + Vector3(0, 2.6, 0))
+		_squash(a["vis"], 0.9)
 	else:
 		_refresh_stack(a)
+
+
+## 찌그러졌다 돌아오기 (착지 · 줍기)
+func _squash(n: Node3D, k: float) -> void:
+	var tw := create_tween()
+	tw.tween_property(n, "scale", Vector3(1.0 + (1.0 - k) * 0.6, k, 1.0 + (1.0 - k) * 0.6), 0.06)
+	tw.tween_property(n, "scale", Vector3.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## 머리 위로 떠오르는 글자
@@ -1054,8 +1083,17 @@ func _physics_process(delta: float) -> void:
 func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 	var body: CharacterBody3D = a["body"]
 	var vel := body.velocity
-	vel.x = v.x * SPEED
-	vel.z = v.z * SPEED
+	if a["bot"]:
+		vel.x = v.x * SPEED
+		vel.z = v.z * SPEED
+	else:
+		# 사람: 가속 · 감속이 있다 (출발 0.12초 · 정지 0.08초 정도). 공중에선 덜 꺾인다
+		var want := Vector2(v.x, v.z) * SPEED
+		var cur := Vector2(vel.x, vel.z)
+		var rate := (42.0 if want.length() > cur.length() else 62.0) * (1.0 if body.is_on_floor() else 0.45)
+		cur = cur.move_toward(want, rate * delta)
+		vel.x = cur.x
+		vel.z = cur.y
 	# 미끄럼판 위: 아래로 주르륵
 	if a.get("on_slide", false) and body.is_on_floor():
 		var n := body.get_floor_normal()
@@ -1123,6 +1161,111 @@ func _low_ledge(body: CharacterBody3D, dir: Vector3) -> bool:
 	return not space.intersect_ray(lo).is_empty() and space.intersect_ray(hi).is_empty()
 
 
+# ── 길찾기 (클릭한 곳까지 건물·울타리를 돌아서 간다) ──────
+
+const NAV_CELL := 0.5
+const NAV_HALF := 44.0
+var nav: AStarGrid2D
+var path: PackedVector2Array = []
+var path_i := 0
+var path_goal := Vector3(INF, 0, INF)
+var path_t := 0.0
+
+
+func _nav_cell(p: Vector3) -> Vector2i:
+	return Vector2i(int(floor((p.x + NAV_HALF) / NAV_CELL)), int(floor((p.z + NAV_HALF) / NAV_CELL)))
+
+
+func _nav_pos(c: Vector2i) -> Vector2:
+	return Vector2(c.x * NAV_CELL - NAV_HALF + NAV_CELL * 0.5, c.y * NAV_CELL - NAV_HALF + NAV_CELL * 0.5)
+
+
+## 정적인 것(건물 · 울타리 · 놀이기구)만 막힘으로 굽는다. 차 · 기차는 움직이니 뺀다
+func _build_nav() -> void:
+	await get_tree().physics_frame
+	nav = AStarGrid2D.new()
+	var n := int(NAV_HALF * 2 / NAV_CELL)
+	nav.region = Rect2i(0, 0, n, n)
+	nav.cell_size = Vector2.ONE
+	nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	nav.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	nav.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	nav.update()
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsShapeQueryParameters3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(NAV_CELL + 0.45, 0.9, NAV_CELL + 0.45)   # 캐릭터 반지름만큼 부풀림
+	q.shape = box
+	q.collision_mask = L_WORLD
+	var ex: Array[RID] = []
+	for v in vehicles:
+		ex.append((v["body"] as AnimatableBody3D).get_rid())
+	q.exclude = ex
+	for y in n:
+		for x in n:
+			var c := _nav_pos(Vector2i(x, y))
+			var ang := atan2(c.y, c.x)
+			if c.length() > _boundary_r(ang) - 0.8:
+				nav.set_point_solid(Vector2i(x, y))
+				continue
+			q.transform = Transform3D(Basis(), Vector3(c.x, 0.85, c.y))
+			if not space.intersect_shape(q, 1).is_empty():
+				nav.set_point_solid(Vector2i(x, y))
+
+
+## 목표까지 길. 목표 칸이 막혀 있으면(벽에 붙은 부품) 가장 가까운 갈 수 있는 곳까지
+func _repath(from: Vector3, to: Vector3) -> void:
+	path = PackedVector2Array()
+	path_i = 0
+	path_goal = to
+	path_t = 0.6
+	if nav == null:
+		return
+	var a := _nav_cell(from).clamp(Vector2i.ZERO, nav.region.size - Vector2i.ONE)
+	var b := _nav_cell(to).clamp(Vector2i.ZERO, nav.region.size - Vector2i.ONE)
+	if nav.is_point_solid(a):
+		return
+	var ids := nav.get_id_path(a, b, true)
+	for k in range(1, ids.size()):
+		path.append(_nav_pos(ids[k]))
+	# 눈에 보이는 앞 지점까지는 건너뛴다 (지그재그 펴기)
+	_skip_visible(from)
+
+
+func _skip_visible(from: Vector3) -> void:
+	var space := get_world_3d().direct_space_state
+	while path_i + 1 < path.size():
+		var nx := path[path_i + 1]
+		var ok := true
+		for hgt in [0.4, 1.2]:
+			for side in [-0.35, 0.35]:
+				var d := Vector3(nx.x - from.x, 0, nx.y - from.z)
+				var perp: Vector3 = Vector3(-d.z, 0, d.x).normalized() * float(side)
+				var rq := PhysicsRayQueryParameters3D.create(from + Vector3(0, float(hgt), 0) + perp, Vector3(nx.x, float(hgt), nx.y) + perp, L_WORLD)
+				if not space.intersect_ray(rq).is_empty():
+					ok = false
+		if not ok or path_i > 40:
+			break
+		path_i += 1
+
+
+## 길 따라 갈 방향. 다 왔으면 ZERO
+func _path_dir(body: CharacterBody3D, delta: float) -> Vector3:
+	path_t -= delta
+	while path_i < path.size():
+		var w := path[path_i]
+		var d := Vector3(w.x - body.global_position.x, 0, w.y - body.global_position.z)
+		if d.length() > 0.35:
+			if path_t <= 0.0:
+				path_t = 0.25
+				_skip_visible(body.global_position)
+				w = path[path_i]
+				d = Vector3(w.x - body.global_position.x, 0, w.y - body.global_position.z)
+			return d.normalized()
+		path_i += 1
+	return Vector3.ZERO
+
+
 func _human_step(a: Dictionary, delta: float) -> void:
 	var body: CharacterBody3D = a["body"]
 	var dir := Vector2.ZERO
@@ -1146,10 +1289,34 @@ func _human_step(a: Dictionary, delta: float) -> void:
 			var tp: Vector3 = (act["node"] as Node3D).global_position
 			var to := Vector3(tp.x - body.position.x, 0, tp.z - body.position.z)
 			var reach := 1.4 if not act.has("hold") else 2.2
-			if to.length() > reach:
-				v = to.normalized()
-			else:
+			if (act["node"] as Node).has_meta("moving"):
+				reach = 3.2   # 움직이는 차 · 기차는 조금 멀어도 손을 뻗어 잡는다
+			if to.length() <= reach:
 				doing = true
+			else:
+				# 목표가 움직였거나(차 · 기차) 길이 없으면 다시 찾는다
+				if path_goal.distance_to(tp) > 1.0 or (path_i >= path.size() and path_t <= 0.0):
+					_repath(body.global_position, tp)
+				var pd := _path_dir(body, delta)
+				# 제자리걸음 0.7초 = 막혔다 → 손 닿는 거리면 그냥 하고, 아니면 길을 다시 찾고 폴짝
+				if body.global_position.distance_to(a.get("prog_pos", Vector3.INF)) > 0.25:
+					a["prog_pos"] = body.global_position
+					a["prog_t"] = 0.0
+				else:
+					a["prog_t"] = a.get("prog_t", 0.0) + delta
+				if a.get("prog_t", 0.0) > 0.7:
+					a["prog_t"] = 0.0
+					if to.length() <= 6.0:
+						pd = Vector3.ZERO
+					else:
+						_repath(body.global_position, tp)
+						jump_req = true
+				if pd != Vector3.ZERO:
+					v = pd
+				elif to.length() <= 6.0:
+					doing = true   # 갈 수 있는 데까지 왔다 — 손을 뻗어 닿는 거리 (지붕 위 · 벽 너머 부품)
+				else:
+					v = to.normalized()
 	if jump_req:
 		jump_buf = 0.15        # 착지 직전에 눌러도 착지하자마자 뛴다
 	jump_req = false
@@ -1160,6 +1327,7 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		a["jumped"] = false
 	if body.is_on_floor() and not was_floor:
 		Sfx.play("land", -10.0)
+		_squash(a["vis"], 0.82)
 	was_floor = body.is_on_floor()
 	if v != Vector3.ZERO and body.is_on_floor():
 		step_t -= delta
@@ -1203,6 +1371,8 @@ func _cancel_act() -> void:
 		(act["node"] as Piece).set_highlight(false)
 	act = {}
 	hold_prog = 0.0
+	path = PackedVector2Array()
+	path_goal = Vector3(INF, 0, INF)
 
 
 ## 뜯는 동안 부품이 흔들리며 캐릭터 쪽으로 끌려온다
@@ -1247,9 +1417,9 @@ func _draw_fx() -> void:
 		fx.draw_circle(mouse, 3.5, Color(1, 1, 1, 0.95))
 		fx.draw_arc(mouse, 11.0, 0, TAU, 24, Color(UI.ACCENT if on else Color.WHITE, 0.9), 2.5)
 		fx.draw_arc(mouse, 12.5, 0, TAU, 24, Color(UI.INK, 0.35), 1.0)
-	else:
+	elif not bag_open:
 		var vs := fx.size
-		fx.draw_string(Data.font_bold, Vector2(0, vs.y * 0.42), "화면을 클릭하면 마우스로 시점을 돌려요  (Esc = 커서 풀기)", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 26, Color(UI.INK, 0.85))
+		fx.draw_string(Data.font_bold, Vector2(0, vs.y * 0.42), "화면을 클릭하면 마우스로 시점을 돌려요  ([Tab] 가방 · Esc 커서)", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 26, Color(UI.INK, 0.85))
 	if not tearing:
 		if not aim.is_empty() and not aim.get("bolted", false):
 			_draw_hand(mouse + Vector2(28, 30), 0.85, 0.0, 0.0)
@@ -1343,7 +1513,7 @@ func _update_aim() -> void:
 		return
 	var me: Vector3 = actors[0]["body"].global_position
 	var far: bool = (target["node"] as Node3D).global_position.distance_to(me) > REACH
-	var verb := "클릭 — 가서 " if far else "클릭 — "
+	var verb := "[F] 가서 " if far else "[F] "
 	if target == act and aim.is_empty():
 		verb = "뜯는 중 — " if hold_prog > 0.0 else "가는 중 — "
 	if target.has("hold"):
@@ -1527,6 +1697,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT:
 				if looking:
 					_try_pick()
+				elif bag_open:
+					_try_pick()   # 가방 열린 동안엔 커서로 가리켜 클릭해도 된다
 				else:
 					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # 첫 클릭은 시점 조작 시작
 			MOUSE_BUTTON_WHEEL_UP:
@@ -1536,7 +1708,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_SPACE: jump_req = true
-			KEY_ESCAPE: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE   # 커서 풀기 (핫바 · 버튼 누를 때)
+			KEY_F: _try_pick()
+			KEY_ESCAPE:
+				if bag_open:
+					_toggle_bag()
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE   # 커서 풀기 (버튼 누를 때)
 			KEY_E: _try_pick()
 			KEY_Q: _drop_selected()
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
@@ -1546,18 +1722,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## 커서 아래 것을 클릭 — 멀면 걸어가서, 가까우면 바로. 뜯기는 도착해서 알아서 끝까지.
 func _try_pick() -> void:
-	if aim.is_empty():
+	_try_pick_entry(aim)
+
+
+## 이걸 하러 간다 (조준해서 F · 가방 「근처」 목록 클릭 공용)
+func _try_pick_entry(e: Dictionary) -> void:
+	if e.is_empty() or not e["alive"]:
 		return
-	if aim.has("hold") and aim["bolted"]:
+	if e.has("hold") and e["bolted"]:
 		Sfx.play("error", -8.0)
 		return
 	if _inv(actors[0]).size() >= HOLD_MAX:
 		Sfx.play("error", -6.0)
 		_toast("가방이 꽉 찼다 — [Q]로 버리고 줍자")
 		return
-	if act != aim:
+	if act != e:
 		_cancel_act()
-	act = aim
+	act = e
 	(act["node"] as Piece).set_highlight(true)
 	Sfx.play("select", -12.0)
 
@@ -1615,7 +1796,7 @@ func _build_hud() -> void:
 		cell.gui_input.connect(func(ev): _slot_input(ev, idx))
 		hotbar.add_child(cell)
 		hot_slots.append(cell)
-	var help := UI.label("마우스: 시점 · 클릭: 가운데 조준점의 것 줍기·뜯기 · WASD 이동 · 휠: 줌 · Space 점프 · 숫자: 칸 · [Q] 버리기 · Esc: 커서 풀기", 16, UI.SOFT)
+	var help := UI.label("마우스: 시점 · [F]/클릭: 조준한 것 줍기·뜯기 · [Tab] 가방 · WASD 이동 · Space 점프 · 휠: 줌 · 숫자: 칸 · [Q] 버리기", 16, UI.SOFT)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(help)
 	layer.add_child(bar)
@@ -1642,7 +1823,74 @@ func _build_hud() -> void:
 	layer.add_child(cv)
 	UI.corner(cv, Control.PRESET_CENTER_BOTTOM, Vector2(0, 118))
 
+	# 가방 (Tab) — 배그식: 커서가 풀리고 「근처」 목록에서 골라 줍는다. 걸으면서도 된다
+	bag_panel = UI.panel()
+	var bpv := UI.vbox(4)
+	bag_panel.add_child(bpv)
+	bpv.add_child(UI.label("근처 (5m)", 26, UI.INK, true))
+	bpv.add_child(UI.label("클릭 = 줍기 · 뜯기   [Tab] 닫기", 16, UI.SOFT))
+	bag_list = UI.vbox(3)
+	bpv.add_child(bag_list)
+	bag_panel.custom_minimum_size = Vector2(340, 0)
+	bag_panel.visible = false
+	layer.add_child(bag_panel)
+	UI.corner(bag_panel, Control.PRESET_CENTER_LEFT, Vector2(16, 0))
+
 	_refresh_hotbar()
+
+
+func _input(ev: InputEvent) -> void:
+	if finished:
+		return
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.physical_keycode == KEY_TAB:
+		_toggle_bag()
+		get_viewport().set_input_as_handled()
+
+
+func _toggle_bag() -> void:
+	bag_open = not bag_open
+	bag_panel.visible = bag_open
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if bag_open else Input.MOUSE_MODE_CAPTURED
+	bag_t = 0.0
+	Sfx.play("select", -12.0)
+
+
+## 근처 목록 다시 그리기 (가방 열려 있는 동안 0.3초마다)
+func _refresh_bag(delta: float) -> void:
+	if not bag_open:
+		return
+	bag_t -= delta
+	if bag_t > 0.0:
+		return
+	bag_t = 0.3
+	for c in bag_list.get_children():
+		c.queue_free()
+	var me: Vector3 = actors[0]["body"].global_position
+	var near := []
+	for list in [ground, tears]:
+		for e in list:
+			if e["alive"] and not e.get("bolted", false) and is_instance_valid(e["node"]):
+				var d: float = (e["node"] as Node3D).global_position.distance_to(me)
+				if d < 5.0:
+					near.append([d, e])
+	near.sort_custom(func(x, y): return x[0] < y[0])
+	if near.is_empty():
+		bag_list.add_child(UI.label("근처에 집을 게 없어요", 18, UI.SOFT))
+	for k in mini(near.size(), 9):
+		var e: Dictionary = near[k][1]
+		var txt: String
+		if e.get("dig", false):
+			txt = "파기 · 모래 (뭐가 나올지 몰라요)"
+		elif e.has("hold"):
+			txt = "뜯기 · %s → %s" % [e["name"], e["item"]["name"]]
+		else:
+			txt = "줍기 · %s" % e["item"]["name"]
+		var b := UI.button("%s   %.1fm" % [txt, near[k][0]], func(): _try_pick_entry(e), 18)
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		UI.tile_button(b)
+		if e == act:
+			b.modulate = Color(1, 0.9, 0.6)
+		bag_list.add_child(b)
 
 
 func _slot_input(ev: InputEvent, idx: int) -> void:
@@ -1686,6 +1934,7 @@ func _toast(s: String) -> void:
 
 
 func _update_hud(delta: float) -> void:
+	_refresh_bag(delta)
 	for w in [30, 10, 5, 4, 3, 2, 1]:
 		if time_left <= w and not warned.has(w):
 			warned[w] = true
@@ -1770,6 +2019,15 @@ func run_scenario(sc: String) -> void:
 	var me: Dictionary = actors[0]
 	var body: CharacterBody3D = me["body"]
 	match sc:
+		"bag":
+			body.global_position = Vector3(-20.0, 0.1, 1.0)
+			cam_yaw = PI / 2
+			await get_tree().physics_frame
+			_toggle_bag()
+			return
+		"reach":
+			await _scenario_reach()
+	match sc:
 		"ride":
 			var w: Dictionary = vehicles[4]   # 객차
 			for v in vehicles:
@@ -1825,3 +2083,40 @@ func run_scenario(sc: String) -> void:
 	print("[scenario] done")
 	if sc != "hand":
 		get_tree().quit()
+
+
+## --scenario=reach : 아무거나 클릭했을 때 실제로 걸어가서 손에 넣는지 (막힘 검사)
+func _scenario_reach() -> void:
+	var me: Dictionary = actors[0]
+	var body: CharacterBody3D = me["body"]
+	var pool := []
+	for e in ground:
+		pool.append(e)
+	for e in tears:
+		if not e["dig"]:
+			pool.append(e)
+	pool.shuffle()
+	var ok := 0
+	var stuck := []
+	var times := []
+	for n in 40:
+		var e: Dictionary = pool[n]
+		if not e["alive"]:
+			continue
+		if _inv(me).size() >= HOLD_MAX - 1:
+			_inv(me).clear()
+		act = e
+		var t := 0.0
+		while e["alive"] and t < 12.0 and not act.is_empty():
+			await get_tree().physics_frame
+			t += 1.0 / 60.0
+		if not e["alive"]:
+			ok += 1
+			times.append(t)
+		else:
+			stuck.append("%s @%s (내 위치 %s)" % [e.get("name", e["item"]["name"]), str((e["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)), str(body.global_position.snapped(Vector3.ONE * 0.1))])
+			_cancel_act()
+	times.sort()
+	print("[reach] 성공 %d / 시도 %d · 중앙값 %.1f초 · 최대 %.1f초" % [ok, ok + stuck.size(), times[times.size() / 2] if times.size() > 0 else 0.0, times[-1] if times.size() > 0 else 0.0])
+	for s in stuck:
+		print("[reach] 막힘: ", s)
