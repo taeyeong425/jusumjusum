@@ -1,0 +1,14 @@
+# Godot
+.godot/
+*.translation
+export_credentials.cfg
+
+# 로컬 도구 (엔진 바이너리 · 템플릿 — CI가 직접 받는다)
+.tools/Godot.app/
+.tools/web/
+.tools/*.tpz
+
+# 빌드 산출물 (GitHub Actions가 빌드해서 Pages로 배포)
+build/web/
+
+.DS_Store

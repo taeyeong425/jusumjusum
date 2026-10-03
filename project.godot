@@ -1,0 +1,33 @@
+; Engine configuration file.
+
+config_version=5
+
+[application]
+
+config/name="주섬주섬"
+config/description="놀이터를 뜯어 덩어리를 모으고, 정해진 물건을 만들어, 할당량을 넘기는 창작 파티게임 (프로토타입)"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[autoload]
+
+Game="*res://scripts/game.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[gui]
+
+theme/custom="res://assets/theme.tres"
+theme/custom_font="res://assets/fonts/Gaegu-Regular.ttf"
+theme/default_font_antialiasing=1
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=1

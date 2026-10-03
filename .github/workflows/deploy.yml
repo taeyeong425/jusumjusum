@@ -1,0 +1,73 @@
+name: 웹 빌드 → GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    # 무료 플랜은 비공개 저장소에서 Pages를 못 쓴다. 공개로 전환하면 그때부터 돈다.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 캐시 — Godot 엔진 + 웹 템플릿
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            godot
+            .tools/web
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Godot + 웹 템플릿 받기
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          B=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          wget -q $B/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          chmod +x godot
+          wget -q $B/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          mkdir -p .tools/web
+          unzip -q -j Godot_v${GODOT_VERSION}-stable_export_templates.tpz \
+            templates/web_nothreads_release.zip templates/web_nothreads_debug.zip -d .tools/web
+          rm Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+
+      - name: 리소스 임포트
+        run: ./godot --headless --import || true
+
+      - name: 웹 내보내기
+        run: |
+          mkdir -p build/web
+          ./godot --headless --export-release "Web" build/web/index.html
+          ls -la build/web
+          test -f build/web/index.wasm
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
