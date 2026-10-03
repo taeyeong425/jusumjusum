@@ -220,3 +220,22 @@ func _next() -> void:
 			if w != 0 and not Game.human_ratings.has(w):
 				Game.human_ratings[w] = 3.0
 		Game.goto("settle")
+
+
+## ←/→ 로 0.1씩 미세 조정, Enter = 다음 작품
+func _unhandled_input(ev: InputEvent) -> void:
+	if done or not (ev is InputEventKey) or not ev.pressed:
+		return
+	if not rate_box.visible:
+		if ev.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
+			_next()
+		return
+	var d := 0.0
+	match ev.physical_keycode:
+		KEY_LEFT, KEY_A: d = -0.1
+		KEY_RIGHT, KEY_D: d = 0.1
+		KEY_ENTER, KEY_KP_ENTER: _next()
+	if d != 0.0:
+		bar.set_value(snappedf(bar.value + d, 0.1))
+		_rate(bar.value)
+		UI.sfx("click", -14.0)

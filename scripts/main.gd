@@ -28,6 +28,17 @@ func _ready() -> void:
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
 			print("[bench] ", info)
 			get_tree().quit())
+	elif _arg("--scenario=") != "":
+		var sc := _arg("--scenario=")
+		Game.new_game()
+		if sc == "build":
+			for p in Game.players:
+				for k in 12:
+					p["inventory"].append(Data.make_item("box", Vector3.ONE, 2 + k % 6, "auto"))
+			goto("build")
+		else:
+			goto("collect")
+		current.call("run_scenario", sc)
 	elif Game.autotest:
 		Game.new_game()
 		goto("reveal")
@@ -45,3 +56,10 @@ func goto(phase: String) -> void:
 	add_child(current)
 	if Game.autotest:
 		print("[autotest] phase → %s (round %d)" % [phase, Game.round_i])
+
+
+func _arg(prefix: String) -> String:
+	for s in OS.get_cmdline_user_args():
+		if s.begins_with(prefix):
+			return s.substr(prefix.length())
+	return ""

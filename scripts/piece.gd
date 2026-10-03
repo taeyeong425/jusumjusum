@@ -15,6 +15,7 @@ var color_idx := 0
 var origin := "ground"
 var inv_index := -1
 var big := false      # 크게 키운 덩어리(받침대·모래밭 등)는 외곽선이 같이 두꺼워지므로 외곽선 없이
+var mkey := ""        # 변형 고유 메시 (육각기둥·별 판 등)
 
 var vis: Node3D
 var mesh_inst: MeshInstance3D
@@ -29,8 +30,9 @@ func setup(t: String, ci: int, collide := true, shp := Vector3.ONE) -> Piece:
 	vis = Node3D.new()
 	add_child(vis)
 	mesh_inst = MeshInstance3D.new()
-	mesh_inst.mesh = Data.mesh(t)
-	mesh_inst.transform = Data.base_xform(t)
+	mkey = Data.mesh_key(t, shp)
+	mesh_inst.mesh = Data.mesh(mkey)
+	mesh_inst.transform = Data.base_xform(mkey)
 	mesh_inst.material_override = Data.material(ci)
 	vis.add_child(mesh_inst)
 	if collide:
@@ -63,7 +65,7 @@ func set_pscale(s: Vector3, clamp := true) -> void:
 		mesh_inst.material_override = _mat()
 	if shape_node:
 		var pts := PackedVector3Array()
-		for p in Data.collision_points(type):
+		for p in Data.collision_points(mkey):
 			pts.append(p * s)
 		var cs := ConvexPolygonShape3D.new()
 		cs.points = pts

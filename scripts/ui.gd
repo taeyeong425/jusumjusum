@@ -199,6 +199,68 @@ static func draw_chunk_icon(c: CanvasItem, item: Dictionary, r: Rect2) -> void:
 	var col := Data.color(item.get("color", 0))
 	var ink := Color(INK, 0.85)
 	var rect := Rect2(cen - Vector2(W, H) * 0.5, Vector2(W, H))
+	var mk := Data.mesh_key(t, sh)
+	var poly := PackedVector2Array()
+	match mk:
+		"plate:star":
+			for i in 10:
+				var ang := -PI / 2 + PI * i / 5.0
+				var rr := 0.5 if i % 2 == 0 else 0.22
+				poly.append(cen + Vector2(cos(ang), sin(ang)) * rr * minf(r.size.x, r.size.y) * 0.95)
+		"plate:heart":
+			for i in 24:
+				var s := TAU * i / 24.0
+				poly.append(cen + Vector2(16.0 * pow(sin(s), 3), -(13.0 * cos(s) - 5.0 * cos(2 * s) - 2.0 * cos(3 * s) - cos(4 * s))) * minf(r.size.x, r.size.y) * 0.028)
+		"plate:round":
+			poly = _ellipse_pts(cen, minf(W, H) * 0.5, minf(W, H) * 0.5, 20)
+		"box:L":
+			var p0 := rect.position
+			poly = PackedVector2Array([p0, p0 + Vector2(W * 0.45, 0), p0 + Vector2(W * 0.45, H * 0.55), rect.end - Vector2(0, H * 0.45), rect.end, p0 + Vector2(0, H)])
+		"box:step":
+			var p0 := rect.position
+			poly = PackedVector2Array([p0, p0 + Vector2(W / 3, 0), p0 + Vector2(W / 3, H / 3), p0 + Vector2(W * 2 / 3, H / 3), p0 + Vector2(W * 2 / 3, H * 2 / 3), p0 + Vector2(W, H * 2 / 3), rect.end, p0 + Vector2(0, H)])
+		"box:cross", "rod:T", "rod:bent":
+			var th := minf(W, H) * (0.34 if mk == "box:cross" else 0.22)
+			var bars := []
+			if mk == "box:cross":
+				bars = [Rect2(cen.x - W / 2, cen.y - th / 2, W, th), Rect2(cen.x - th / 2, cen.y - H / 2, th, H)]
+			elif mk == "rod:T":
+				bars = [Rect2(rect.position.x, rect.position.y, W, th), Rect2(cen.x - th / 2, rect.position.y, th, H)]
+			else:
+				bars = [Rect2(rect.position.x, rect.position.y, W, th), Rect2(rect.position.x, rect.position.y, th, H)]
+			for br in bars:
+				c.draw_rect(br, col)
+			for br in bars:
+				c.draw_rect(br, ink, false, 1.5)
+			return
+		"cone:4", "cone:5", "wedge:roof":
+			poly = PackedVector2Array([Vector2(cen.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)])
+		"cylinder:6", "sphere:gem":
+			for i in 6:
+				var ang := PI / 6 + TAU * i / 6.0
+				poly.append(cen + Vector2(cos(ang) * W * 0.5, sin(ang) * H * 0.5))
+		"cylinder:3":
+			poly = PackedVector2Array([Vector2(cen.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)])
+		"cylinder:pot":
+			poly = PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), rect.end - Vector2(W * 0.18, 0), Vector2(rect.position.x + W * 0.18, rect.end.y)])
+		"ring:4":
+			var q := minf(W, H)
+			var o := Rect2(cen - Vector2(q, q) * 0.5, Vector2(q, q))
+			c.draw_rect(o.grow(-q * 0.12), col, false, q * 0.24)
+			c.draw_rect(o, ink, false, 1.5)
+			c.draw_rect(o.grow(-q * 0.25), ink, false, 1.5)
+			return
+		"ring:arch":
+			var rad := minf(W * 0.5, H)
+			var base := Vector2(cen.x, cen.y + rad * 0.5)
+			c.draw_arc(base, rad * 0.75, PI, TAU, 16, col, rad * 0.45)
+			c.draw_arc(base, rad, PI, TAU, 16, ink, 1.5)
+			c.draw_arc(base, rad * 0.52, PI, TAU, 16, ink, 1.5)
+			return
+	if poly.size() > 2:
+		c.draw_colored_polygon(poly, col)
+		c.draw_polyline(_closed(poly), ink, 1.5)
+		return
 	match t:
 		"sphere", "potato", "pebble":
 			var pts := _ellipse_pts(cen, W * 0.5, H * 0.5, 20 if t == "sphere" else (8 if t == "potato" else 6))

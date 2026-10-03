@@ -40,17 +40,17 @@ const SIZE_MAX := 3.0
 ## 조립에서는 전체 크기와 회전만 바꾼다. 납작한 원기둥이 필요하면 "바퀴"를 뜯어 와야 한다.
 ## [이름, 비율(로컬 X·Y·Z)]
 const VARIANTS := {
-	"sphere": [["공", Vector3(1, 1, 1)], ["럭비공", Vector3(1.5, 0.8, 0.8)], ["접시", Vector3(1.4, 0.35, 1.4)]],
-	"hemi": [["반구", Vector3(1, 1, 1)], ["납작 반구", Vector3(1.3, 0.5, 1.3)], ["높은 반구", Vector3(0.8, 1.6, 0.8)]],
-	"cylinder": [["원기둥", Vector3(1, 1, 1)], ["바퀴", Vector3(1.5, 0.35, 1.5)], ["기둥", Vector3(0.55, 2.0, 0.55)], ["동전", Vector3(1.2, 0.12, 1.2)]],
-	"cone": [["원뿔", Vector3(1, 1, 1)], ["뾰족 원뿔", Vector3(0.6, 1.6, 0.6)], ["납작 원뿔", Vector3(1.4, 0.5, 1.4)]],
-	"capsule": [["캡슐", Vector3(1, 1, 1)], ["긴 캡슐", Vector3(0.8, 1.6, 0.8)], ["통통 캡슐", Vector3(1.6, 0.9, 1.6)]],
-	"ring": [["링", Vector3(1, 1, 1)], ["타이어", Vector3(1, 2.6, 1)], ["가는 링", Vector3(1.2, 0.6, 1.2)]],
-	"box": [["정육면체", Vector3(1, 1, 1)], ["벽돌", Vector3(1.6, 0.6, 0.9)], ["기둥 블록", Vector3(0.5, 2.0, 0.5)]],
-	"rod": [["막대", Vector3(1, 1, 1)], ["짧은 막대", Vector3(1, 0.45, 1)], ["긴 막대", Vector3(0.8, 1.7, 0.8)]],
-	"plate": [["판", Vector3(1, 1, 1)], ["넓은 판", Vector3(1.7, 1, 1.6)], ["좁은 판", Vector3(0.45, 1, 1.3)], ["긴 판", Vector3(3.0, 1.2, 0.9)]],
-	"wedge": [["쐐기", Vector3(1, 1, 1)], ["납작 쐐기", Vector3(1.4, 0.5, 1)], ["긴 쐐기", Vector3(0.7, 1, 2.0)]],
-	"potato": [["감자", Vector3(1, 1, 1)], ["길쭉 감자", Vector3(1.4, 0.8, 0.8)]],
+	"sphere": [["공", Vector3(1, 1, 1)], ["럭비공", Vector3(1.5, 0.8, 0.8)], ["접시", Vector3(1.4, 0.35, 1.4)], ["보석", Vector3(1.0, 1.15, 1.0), "sphere:gem"], ["알", Vector3(0.85, 1.2, 0.85)]],
+	"hemi": [["반구", Vector3(1, 1, 1)], ["납작 반구", Vector3(1.3, 0.5, 1.3)], ["높은 반구", Vector3(0.8, 1.6, 0.8)], ["버섯 갓", Vector3(1.6, 0.8, 1.6), "hemi:cap"]],
+	"cylinder": [["원기둥", Vector3(1, 1, 1)], ["바퀴", Vector3(1.5, 0.35, 1.5)], ["기둥", Vector3(0.55, 2.0, 0.55)], ["동전", Vector3(1.2, 0.12, 1.2)], ["육각기둥", Vector3(1.05, 1.0, 1.05), "cylinder:6"], ["삼각기둥", Vector3(1.1, 0.9, 1.1), "cylinder:3"], ["화분", Vector3(1.1, 0.85, 1.1), "cylinder:pot"]],
+	"cone": [["원뿔", Vector3(1, 1, 1)], ["뾰족 원뿔", Vector3(0.6, 1.6, 0.6)], ["납작 원뿔", Vector3(1.4, 0.5, 1.4)], ["피라미드", Vector3(1.2, 1.0, 1.2), "cone:4"], ["오각뿔", Vector3(1.0, 1.3, 1.0), "cone:5"]],
+	"capsule": [["캡슐", Vector3(1, 1, 1)], ["긴 캡슐", Vector3(0.8, 1.6, 0.8)], ["통통 캡슐", Vector3(1.6, 0.9, 1.6)], ["콩", Vector3(1.0, 1.0, 1.3), "capsule:bean"]],
+	"ring": [["링", Vector3(1, 1, 1)], ["타이어", Vector3(1, 2.6, 1)], ["가는 링", Vector3(1.2, 0.6, 1.2)], ["네모 링", Vector3(1.1, 1.0, 1.1), "ring:4"], ["반달 아치", Vector3(1.3, 1.0, 1.0), "ring:arch"]],
+	"box": [["정육면체", Vector3(1, 1, 1)], ["벽돌", Vector3(1.6, 0.6, 0.9)], ["기둥 블록", Vector3(0.5, 2.0, 0.5)], ["ㄴ자 블록", Vector3(1.2, 1.0, 1.0), "box:L"], ["계단 블록", Vector3(1.3, 1.0, 1.0), "box:step"], ["십자 블록", Vector3(1.3, 0.45, 1.3), "box:cross"]],
+	"rod": [["막대", Vector3(1, 1, 1)], ["짧은 막대", Vector3(1, 0.45, 1)], ["긴 막대", Vector3(0.8, 1.7, 0.8)], ["ㄱ자 막대", Vector3(1.1, 1.0, 1.1), "rod:bent"], ["T자 막대", Vector3(1.2, 1.0, 1.2), "rod:T"]],
+	"plate": [["판", Vector3(1, 1, 1)], ["넓은 판", Vector3(1.7, 1, 1.6)], ["좁은 판", Vector3(0.45, 1, 1.3)], ["긴 판", Vector3(3.0, 1.2, 0.9)], ["둥근 판", Vector3(1.1, 1.0, 1.1), "plate:round"], ["별 판", Vector3(1.2, 1.0, 1.2), "plate:star"], ["하트 판", Vector3(1.15, 1.0, 1.15), "plate:heart"]],
+	"wedge": [["쐐기", Vector3(1, 1, 1)], ["납작 쐐기", Vector3(1.4, 0.5, 1)], ["긴 쐐기", Vector3(0.7, 1, 2.0)], ["지붕", Vector3(1.3, 0.8, 1.0), "wedge:roof"]],
+	"potato": [["감자", Vector3(1, 1, 1)], ["길쭉 감자", Vector3(1.4, 0.8, 0.8)], ["울퉁 감자", Vector3(1.1, 1.1, 1.0), "potato:lump"]],
 	"pebble": [["자갈", Vector3(1, 1, 1)], ["납작 자갈", Vector3(1.3, 0.6, 1.3)]],
 }
 
@@ -136,10 +136,144 @@ static func mesh(t: String) -> Mesh:
 		"pebble":
 			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.6; s.radial_segments = 6; s.rings = 3; m = s
 		_:
-			push_error("unknown type " + t)
-			m = BoxMesh.new()
+			m = _variant_mesh(t)
 	_meshes[t] = m
 	return m
+
+
+## 변형 고유의 모양 (같은 종류지만 생김새가 다르다). 크기는 원래 종류의 틀 안에 맞춘다.
+static func _variant_mesh(key: String) -> Mesh:
+	match key:
+		"sphere:gem":
+			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.6; s.radial_segments = 6; s.rings = 2; return s
+		"hemi:cap":
+			var h := SphereMesh.new(); h.radius = 0.3; h.height = 0.3; h.is_hemisphere = true; h.radial_segments = 18; h.rings = 5
+			var st := CylinderMesh.new(); st.top_radius = 0.1; st.bottom_radius = 0.12; st.height = 0.14; st.radial_segments = 10; st.rings = 0
+			return _merge([[h, Transform3D(Basis(), Vector3(0, 0.07, 0))], [st, Transform3D()]])
+		"cylinder:6", "cylinder:3":
+			var c := CylinderMesh.new(); c.top_radius = 0.25; c.bottom_radius = 0.25; c.height = 0.6
+			c.radial_segments = 6 if key == "cylinder:6" else 3; c.rings = 0; return c
+		"cylinder:pot":
+			var c := CylinderMesh.new(); c.top_radius = 0.28; c.bottom_radius = 0.18; c.height = 0.6; c.radial_segments = 16; c.rings = 0
+			var rim := CylinderMesh.new(); rim.top_radius = 0.31; rim.bottom_radius = 0.31; rim.height = 0.1; rim.radial_segments = 16; rim.rings = 0
+			return _merge([[c, Transform3D()], [rim, Transform3D(Basis(), Vector3(0, 0.27, 0))]])
+		"cone:4", "cone:5":
+			var c := CylinderMesh.new(); c.top_radius = 0.0; c.bottom_radius = 0.3; c.height = 0.6
+			c.radial_segments = 4 if key == "cone:4" else 5; c.rings = 0; return c
+		"capsule:bean":
+			var a := CapsuleMesh.new(); a.radius = 0.15; a.height = 0.42; a.radial_segments = 12; a.rings = 2
+			return _merge([[a, Transform3D(Basis(Vector3.RIGHT, 0.5), Vector3(0, 0.1, -0.08))],
+				[a, Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(0, -0.1, -0.08))]])
+		"ring:4":
+			var parts := []
+			for i in 4:
+				var b := BoxMesh.new(); b.size = Vector3(0.6, 0.13, 0.13)
+				var ang := PI / 2 * i
+				parts.append([b, Transform3D(Basis(Vector3.UP, ang), Basis(Vector3.UP, ang) * Vector3(0, 0, 0.235))])
+			return _merge(parts)
+		"ring:arch":
+			var parts := []
+			for i in 7:
+				var ang := PI * (i + 0.5) / 7.0
+				var b := BoxMesh.new(); b.size = Vector3(0.15, 0.15, 0.2)
+				parts.append([b, Transform3D(Basis(Vector3.BACK, ang), Vector3(cos(ang) * 0.24, sin(ang) * 0.24, 0))])
+			return _merge(parts)
+		"box:L":
+			var a := BoxMesh.new(); a.size = Vector3(0.5, 0.22, 0.5)
+			var b := BoxMesh.new(); b.size = Vector3(0.22, 0.28, 0.5)
+			return _merge([[a, Transform3D(Basis(), Vector3(0, -0.14, 0))], [b, Transform3D(Basis(), Vector3(-0.14, 0.11, 0))]])
+		"box:step":
+			var parts := []
+			for i in 3:
+				var b := BoxMesh.new(); b.size = Vector3(0.5 - i * 0.1667, 0.1667, 0.5)
+				parts.append([b, Transform3D(Basis(), Vector3(-i * 0.0833, -0.1667 + i * 0.1667, 0))])
+			return _merge(parts)
+		"box:cross":
+			var a := BoxMesh.new(); a.size = Vector3(0.5, 0.25, 0.17)
+			var b := BoxMesh.new(); b.size = Vector3(0.17, 0.25, 0.5)
+			return _merge([[a, Transform3D()], [b, Transform3D()]])
+		"rod:bent":
+			var a := BoxMesh.new(); a.size = Vector3(0.12, 0.9, 0.12)
+			var b := BoxMesh.new(); b.size = Vector3(0.36, 0.12, 0.12)
+			return _merge([[a, Transform3D(Basis(), Vector3(-0.12, 0, 0))], [b, Transform3D(Basis(), Vector3(0.12, 0.39, 0))]])
+		"rod:T":
+			var a := BoxMesh.new(); a.size = Vector3(0.12, 0.9, 0.12)
+			var b := BoxMesh.new(); b.size = Vector3(0.5, 0.12, 0.12)
+			return _merge([[a, Transform3D()], [b, Transform3D(Basis(), Vector3(0, 0.39, 0))]])
+		"plate:round":
+			var c := CylinderMesh.new(); c.top_radius = 0.3; c.bottom_radius = 0.3; c.height = 0.06; c.radial_segments = 22; c.rings = 0; return c
+		"plate:star":
+			var pts := PackedVector2Array()
+			for i in 10:
+				var ang := -PI / 2 + PI * i / 5.0
+				var rr := 0.33 if i % 2 == 0 else 0.14
+				pts.append(Vector2(cos(ang), sin(ang)) * rr)
+			return _extrude(pts, 0.06)
+		"plate:heart":
+			var pts := PackedVector2Array()
+			for i in 28:
+				var s := TAU * i / 28.0
+				var x := 16.0 * pow(sin(s), 3)
+				var y := 13.0 * cos(s) - 5.0 * cos(2 * s) - 2.0 * cos(3 * s) - cos(4 * s)
+				pts.append(Vector2(x, -y) * 0.019)
+			return _extrude(pts, 0.06)
+		"wedge:roof":
+			var p := PrismMesh.new(); p.size = Vector3(0.5, 0.5, 0.5); p.left_to_right = 0.5; return p
+		"potato:lump":
+			var parts := []
+			var spots := [[Vector3(-0.1, 0, 0), 0.24], [Vector3(0.12, 0.04, 0.05), 0.2], [Vector3(0.02, 0.1, -0.08), 0.17]]
+			for sp in spots:
+				var s := SphereMesh.new(); s.radius = sp[1]; s.height = sp[1] * 2; s.radial_segments = 7; s.rings = 4
+				parts.append([s, Transform3D(Basis(), sp[0])])
+			return _merge(parts)
+	push_error("unknown mesh " + key)
+	return BoxMesh.new()
+
+
+static func _merge(parts: Array) -> Mesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for p in parts:
+		st.append_from(p[0], 0, p[1])
+	return st.commit()
+
+
+## XZ 평면 다각형을 두께 h로 세운 판 (Godot 앞면 = 시계 방향)
+static func _extrude(poly: PackedVector2Array, h: float) -> Mesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tri := Geometry2D.triangulate_polygon(poly)
+	if Geometry2D.is_polygon_clockwise(poly):
+		poly.reverse()
+		tri = Geometry2D.triangulate_polygon(poly)
+	var y0 := -h * 0.5
+	var y1 := h * 0.5
+	for i in range(0, tri.size(), 3):
+		var a := poly[tri[i]]; var b := poly[tri[i + 1]]; var c := poly[tri[i + 2]]
+		st.set_normal(Vector3.UP)
+		for v in [a, b, c]:
+			st.add_vertex(Vector3(v.x, y1, v.y))
+		st.set_normal(Vector3.DOWN)
+		for v in [a, c, b]:
+			st.add_vertex(Vector3(v.x, y0, v.y))
+	var n := poly.size()
+	for i in n:
+		var p := poly[i]; var q := poly[(i + 1) % n]
+		var e := q - p
+		var nrm := Vector3(-e.y, 0, e.x).normalized()
+		st.set_normal(nrm)
+		for v in [Vector3(p.x, y0, p.y), Vector3(q.x, y0, q.y), Vector3(q.x, y1, q.y),
+				Vector3(p.x, y0, p.y), Vector3(q.x, y1, q.y), Vector3(p.x, y1, p.y)]:
+			st.add_vertex(v)
+	return st.commit()
+
+
+## 이 비율이 고유 메시를 가진 변형이면 그 메시 키
+static func mesh_key(t: String, shape: Vector3) -> String:
+	for v in VARIANTS.get(t, []):
+		if v.size() > 2 and (v[1] as Vector3).is_equal_approx(shape):
+			return v[2]
+	return t
 
 
 static func _base_scale(t: String) -> Vector3:

@@ -45,6 +45,9 @@ var hud_sel: Label
 var spin_btn: Button
 var warn: Label
 var warn_t := 0.0
+var guides: Array = []        # 맞춤 안내선 [월드 a, 월드 b]
+var snap_note := ""
+var snap_t := 0.0
 
 
 func _ready() -> void:
@@ -195,7 +198,7 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("끌기: 덩어리 = 옮겨서 위에 얹기 · Shift+끌기 = 높이 · 손잡이 = 크기/회전\n빈 곳·우클릭 끌기 = 시점 · 휠 = 줌 · Ctrl+Z 되돌리기 · F 덩어리로 시점 이동", 17, UI.SOFT))
+	bv.add_child(UI.label("끌기: 덩어리 = 위에 얹기·옆면에 붙이기 · Shift+끌기 = 높이 · 손잡이 = 크기/회전 · Alt = 맞춤 끄기\n빈 곳·우클릭 끌기 = 시점 · 휠 = 줌 · Ctrl+Z 되돌리기 · F 덩어리로 시점 이동", 17, UI.SOFT))
 	bv.add_child(UI.button("다 했다 →", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
@@ -403,10 +406,18 @@ func _knobs() -> Dictionary:
 
 
 func _draw_overlay() -> void:
+	for g in guides:
+		if cam.is_position_behind(g[0]) or cam.is_position_behind(g[1]):
+			continue
+		overlay.draw_dashed_line(cam.unproject_position(g[0]), cam.unproject_position(g[1]), Color("#3FA7D6"), 2.5, 8.0)
 	var k := _knobs()
 	if k.is_empty():
 		return
 	var r: Rect2 = k["rect"]
+	if snap_t > 0.0 and snap_note != "":
+		var tp := r.position + Vector2(r.size.x * 0.5 - 80, r.size.y + 30)
+		overlay.draw_rect(Rect2(tp - Vector2(0, 18), Vector2(160, 26)), Color(1, 1, 1, 0.85 * minf(1.0, snap_t * 3)))
+		overlay.draw_string(Data.font_bold, tp, snap_note, HORIZONTAL_ALIGNMENT_CENTER, 160, 17, Color("#2F7FA8", minf(1.0, snap_t * 3)))
 	overlay.draw_rect(r.grow(6), Color(UI.ACCENT, 0.55), false, 2.0)
 	for nm in ["size", "rot"]:
 		var p: Vector2 = k[nm]
@@ -424,8 +435,10 @@ func _ray_piece(mouse: Vector2) -> Dictionary:
 	return get_world_3d().direct_space_state.intersect_ray(q)
 
 
-## 끌기: 커서가 가리키는 곳(책상이나 다른 덩어리 윗면) 위에 얹는다. 옆면에 붙지 않는다.
-## 잡은 지점을 유지해서, 잡는 순간 덩어리가 커서로 튀지 않는다.
+## 끌기: 커서가 가리키는 곳에 놓는다.
+##  · 다른 덩어리 윗면/책상 → 그 위에 얹는다 (잡은 지점 유지)
+##  · 다른 덩어리 옆면 → 그 면에 딱 붙인다 (면과 면이 만난다)
+##  · 근처 덩어리와 가운데·모서리가 거의 맞으면 자석처럼 맞춘다 (Alt = 보정 끄기)
 func _snap_target(mouse: Vector2) -> Vector3:
 	var cur: Vector3 = anim.get(selected, selected.position)
 	var from := cam.project_ray_origin(mouse)
@@ -434,9 +447,15 @@ func _snap_target(mouse: Vector2) -> Vector3:
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 50, 0b11)
 	q.exclude = [selected.body.get_rid()]
 	var hit := space.intersect_ray(q)
+	var free := Input.is_key_pressed(KEY_ALT)
+	var h := selected.world_half_extents()
+	guides = []
 	var p: Vector3
 	if hit:
 		p = hit["position"]
+		var n: Vector3 = hit["normal"]
+		if absf(n.y) < 0.5 and hit["collider"].has_meta("piece"):
+			return _side_attach(hit["collider"].get_meta("piece"), p, n, h, free)
 	else:
 		if absf(dir.y) < 0.001:
 			return cur
@@ -445,10 +464,11 @@ func _snap_target(mouse: Vector2) -> Vector3:
 			return cur
 		p = from + dir * t
 	var xz := Vector3(p.x, 0, p.z) + grab_off
+	if not free:
+		xz = _align_xz(xz, h)
 	xz.x = clampf(xz.x, -TABLE, TABLE)
 	xz.z = clampf(xz.z, -TABLE, TABLE)
 	# 그 자리 바로 아래 가장 높은 면 위에 얹는다
-	var h := selected.world_half_extents()
 	var top := 0.0
 	for off in [Vector3.ZERO, Vector3(h.x * 0.6, 0, 0), Vector3(-h.x * 0.6, 0, 0), Vector3(0, 0, h.z * 0.6), Vector3(0, 0, -h.z * 0.6)]:
 		var dq := PhysicsRayQueryParameters3D.create(xz + off + Vector3(0, 8, 0), xz + off + Vector3(0, -1, 0), 0b11)
@@ -457,6 +477,129 @@ func _snap_target(mouse: Vector2) -> Vector3:
 		if dh:
 			top = maxf(top, dh["position"].y)
 	return Vector3(xz.x, top + h.y, xz.z)
+
+
+## 옆면에 붙이기: 맞닿는 축은 딱 붙이고, 나머지 축은 가운데·밑면·윗면 맞춤
+func _side_attach(other: Piece, p: Vector3, n: Vector3, h: Vector3, free: bool) -> Vector3:
+	var oc := other.global_position
+	var oh := other.world_half_extents()
+	var ax := 0 if absf(n.x) >= absf(n.z) else 2
+	var sx := signf(n.x) if ax == 0 else signf(n.z)
+	var out := p
+	out[ax] = oc[ax] + sx * (oh[ax] + h[ax] - 0.004)
+	var bx := 2 - ax
+	var y := maxf(p.y, h.y)
+	if not free:
+		var tol := 0.12
+		if absf(out[bx] - oc[bx]) < tol + oh[bx] * 0.25:
+			out[bx] = oc[bx]
+			_guide(oc, out)
+		for cand in [oc.y - oh.y + h.y, oc.y, oc.y + oh.y - h.y]:   # 밑면 맞춤 우선
+			if absf(y - cand) < tol:
+				y = cand
+				break
+		y = maxf(y, h.y)
+		_note("면 붙이기")
+	out.y = y
+	out.x = clampf(out.x, -TABLE, TABLE)
+	out.z = clampf(out.z, -TABLE, TABLE)
+	return out
+
+
+## 위에 얹을 때: 근처 덩어리와 가운데·모서리 줄 맞춤
+func _align_xz(xz: Vector3, h: Vector3) -> Vector3:
+	var tol := 0.07
+	for axis in [0, 2]:
+		var best := INF
+		var val: float = xz[axis]
+		var hit: Piece = null
+		for o in work_root.get_children():
+			if o == selected or not (o is Piece):
+				continue
+			var oc: Vector3 = anim.get(o, (o as Piece).position)
+			var oh := (o as Piece).world_half_extents()
+			for pair in [[oc[axis], xz[axis]], [oc[axis] - oh[axis], xz[axis] - h[axis]], [oc[axis] + oh[axis], xz[axis] + h[axis]]]:
+				var d: float = pair[0] - pair[1]
+				if absf(d) < tol and absf(d) < absf(best):
+					best = d
+					hit = o
+		if hit != null:
+			val += best
+			var g := Vector3(xz.x, 0, xz.z)
+			g[axis] = val
+			_guide(hit.global_position, g + Vector3(0, selected.position.y, 0))
+		xz[axis] = val
+	return xz
+
+
+func _guide(a: Vector3, b: Vector3) -> void:
+	guides.append([a, b])
+
+
+func _note(s: String) -> void:
+	snap_note = s
+	snap_t = 0.8
+
+
+## 크기: 옆·아래 덩어리와 너비/높이가 거의 같으면 딱 맞추고, 0.5배 단위 근처면 거기 맞춘다
+func _snap_size(k: float) -> float:
+	if Input.is_key_pressed(KEY_ALT):
+		return k
+	var h1 := selected.world_half_extents() / maxf(selected.size, 0.001)   # 크기 1배일 때 반폭
+	var best_k := k
+	var best_err := 0.06
+	var msg := ""
+	var me := selected.global_position
+	for o in work_root.get_children():
+		if o == selected or not (o is Piece):
+			continue
+		var op := o as Piece
+		if op.global_position.distance_to(me) > 1.6:
+			continue
+		var oh := op.world_half_extents()
+		for a in 3:
+			if h1[a] < 0.01:
+				continue
+			var kk: float = oh[a] / h1[a]
+			var err := absf(kk - k) / k
+			if err < best_err:
+				best_err = err
+				best_k = kk
+				msg = "%s에 %s 맞춤" % [Data.variant_name(op.type, op.shape), ["너비", "높이", "깊이"][a]]
+	if msg == "":
+		var r := snappedf(k, 0.5)
+		if absf(r - k) < 0.04:
+			best_k = r
+			msg = "%.1f배" % r
+	if msg != "":
+		_note(msg)
+	return best_k
+
+
+## 회전을 놓을 때: 반듯한 방향(90° 단위)에 가까우면 딱 맞춘다
+func _snap_rotation() -> void:
+	if not selected or Input.is_key_pressed(KEY_ALT):
+		return
+	var b := selected.basis.orthonormalized()
+	var cols := []
+	var used := {}
+	for i in 3:
+		var v: Vector3 = b[i]
+		var ax := v.abs().max_axis_index()
+		if used.has(ax):
+			return
+		used[ax] = true
+		var c := Vector3.ZERO
+		c[ax] = signf(v[ax])
+		cols.append(c)
+	var nb := Basis(cols[0], cols[1], cols[2])
+	if nb.determinant() < 0:
+		return
+	var diff := (nb.inverse() * b).get_rotation_quaternion().get_angle()
+	if diff > 0.001 and diff < deg_to_rad(12):
+		var tw := create_tween()
+		tw.tween_method(func(t: float): selected.basis = b.slerp(nb, t), 0.0, 1.0, 0.12)
+		_note("반듯하게")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -490,6 +633,9 @@ func _input(event: InputEvent) -> void:
 			_select(null)   # 빈 곳을 그냥 클릭 = 선택 해제
 		if mode == "move":
 			UI.sfx("place", -10.0)
+		if mode == "rot":
+			_snap_rotation()
+		guides = []
 		mode = ""
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -511,6 +657,7 @@ func _input(event: InputEvent) -> void:
 					var c: Vector2 = k["center"]
 					var d := maxf(4.0, mm.position.distance_to(c))
 					selected.set_size(size0 * d / dist0)
+					selected.set_size(_snap_size(selected.size))
 			"rot":
 				var right := cam.global_transform.basis.x
 				selected.basis = (Basis(Vector3.UP, mm.relative.x * 0.012) * Basis(right, mm.relative.y * 0.012) * selected.basis).orthonormalized()
@@ -604,6 +751,7 @@ func _process(delta: float) -> void:
 		if mode != "move" and (p as Piece).position.distance_to(t) < 0.002:
 			(p as Piece).position = t
 			anim.erase(p)
+	snap_t -= delta
 	overlay.queue_redraw()
 	hud_time.text = UI.clock(time_left)
 	hud_time.add_theme_color_override("font_color", UI.BAD if time_left < 30 else UI.INK)
@@ -639,3 +787,29 @@ func _finish(forced := false) -> void:
 		p["edits"] = Game.rng.randi_range(4, 40)
 	UI.sfx("whoosh", -6.0)
 	Game.goto("exhibit")
+
+
+# ── 시나리오 테스트 (--scenario=build): 면 붙이기 · 크기 맞춤 수치 확인 ──
+func run_scenario(_sc: String) -> void:
+	await get_tree().process_frame
+	time_left = 999.0
+	var a := _spawn(0)
+	var b := _spawn(1)
+	a.set_size(1.4)
+	a.position = Vector3(0, a.world_half_extents().y, 0)
+	anim.erase(a)
+	b.set_size(0.8)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	selected = b
+	var ah := a.world_half_extents()
+	var bh := b.world_half_extents()
+	var hitp := Vector3(ah.x, ah.y * 0.9, 0.05)
+	var t := _side_attach(a, hitp, Vector3.RIGHT, bh, false)
+	print("[build] side gap=%.3f (0 = 면이 딱 붙음)  z=%.3f (가운데 맞춤 0)  bottom=%.3f" % [(t.x - bh.x) - ah.x, t.z, t.y - bh.y])
+	b.position = t
+	b.set_size(1.33)
+	var k := _snap_size(b.size)
+	print("[build] size 1.33 → %.3f (옆 덩어리 1.4에 맞춤) note=%s" % [k, snap_note])
+	print("[scenario] done")
+	get_tree().quit()

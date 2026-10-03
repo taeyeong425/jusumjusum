@@ -41,12 +41,15 @@ var tick_t := 0.0
 var step_t := 0.0
 var slot := 0
 var jump_req := false
+var jump_buf := 0.0
+var warned := {}                  # 남은 시간 경고 (30·10초)
 var was_floor := true
 
 var hud_time: Label
 var hud_prompt: Label
 var hud_bar: ProgressBar
 var fx: Control                  # 손 + 원형 게이지
+var sim_move := Vector2.ZERO      # 시나리오 테스트용 입력
 var hotbar: HBoxContainer
 var hot_slots: Array = []
 var minimap: Control
@@ -112,8 +115,8 @@ func _assemble(root: Node3D, parts: Array) -> void:
 				var nst := SurfaceTool.new()
 				nst.begin(Mesh.PRIMITIVE_TRIANGLES)
 				batch[ci] = nst
-			var pxf := xf * Transform3D(Basis.from_euler(rot * PI / 180.0), p[3]) * Transform3D(Basis.from_scale(s), Vector3.ZERO) * Data.base_xform(t)
-			(batch[ci] as SurfaceTool).append_from(Data.mesh(t), 0, pxf)
+			var pxf := xf * Transform3D(Basis.from_euler(rot * PI / 180.0), p[3]) * Transform3D(Basis.from_scale(s), Vector3.ZERO) * Data.base_xform(Data.mesh_key(t, shp))
+			(batch[ci] as SurfaceTool).append_from(Data.mesh(Data.mesh_key(t, shp)), 0, pxf)
 			continue
 		var pc := Piece.new().setup(t, p[2], true, shp)
 		pc.set_pscale(s, false)
@@ -125,7 +128,7 @@ func _assemble(root: Node3D, parts: Array) -> void:
 			var item := Data.make_item(t, shp, p[2], "tear")
 			var hold: float = float(p[7]) if p.size() > 7 else 1.6
 			if root is AnimatableBody3D:
-				hold = maxf(0.4, hold * 0.3)   # 움직이는 차·기차 부품은 쫓아가서 잠깐 잡으면 된다
+				hold = maxf(0.6, hold * 0.35)   # 움직이는 차·기차 부품은 쫓아가서 잠깐 잡으면 된다
 			var e := {"node": pc, "item": item, "hold": hold,
 				"name": tear_name, "alive": true, "bolted": false, "dig": false, "uses": 1}
 			pc.set_meta("entry", e)
@@ -159,6 +162,30 @@ func _solid(parent: Node3D, pos: Vector3, size: Vector3, yaw := 0.0) -> StaticBo
 		var g: Transform3D = (parent.transform if parent != world else Transform3D.IDENTITY) * b.transform
 		obstacles.append([Vector2(g.origin.x, g.origin.z), Vector2(size.x, size.z) * 0.5, -g.basis.get_euler().y])
 	return b
+
+
+## a→b 비스듬한 발판 (윗면이 a-b 선을 지난다). 계단·미끄럼틀용
+func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, slide := false) -> StaticBody3D:
+	var thick := 0.3
+	var d := b - a
+	var xa := d.normalized()
+	var za := xa.cross(Vector3.UP).normalized()
+	var ya := za.cross(xa)
+	var body := StaticBody3D.new()
+	body.collision_layer = L_WORLD
+	body.collision_mask = 0
+	body.transform = Transform3D(Basis(xa, ya, za), (a + b) * 0.5 - ya * thick * 0.5)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(d.length(), thick, width)
+	cs.shape = sh
+	body.add_child(cs)
+	if slide:
+		body.set_meta("slide", true)
+	parent.add_child(body)
+	var g: Transform3D = parent.global_transform * body.transform if parent.is_inside_tree() else parent.transform * body.transform
+	obstacles.append([Vector2(g.origin.x, g.origin.z), Vector2(absf(d.x) + width, absf(d.z) + width) * 0.5, -parent.rotation.y])
+	return body
 
 
 func _place(builder: Callable, pos: Vector3, yaw := 0.0, arg = null) -> Node3D:
@@ -373,22 +400,30 @@ func _seesaw(r: Node3D) -> void:
 
 
 func _slide(r: Node3D) -> void:
+	# 계단으로 올라가서(-x) 미끄럼판으로 내려온다(+x). 꼭대기 2.6
+	var top := 2.6
 	var p := [
-		["box", Vector3(3.2, 0.4, 3.2), 10, Vector3(-1.2, 2.5, 0), Vector3.ZERO, 1.0],
-		["plate", 3, 3, Vector3(1.0, 1.3, 0), Vector3(0, 0, -38), 1.6, "미끄럼판", 3.0],
-		["capsule", 1, 4, Vector3(-1.2, 3.1, -0.75), Vector3(90, 0, 0), 0.0, "", 0],
-		["sphere", 0, 2, Vector3(-1.2, 3.35, 0), Vector3.ZERO, 0.9, "꼭대기 공", 1.4],
+		["box", Vector3(3.2, 0.4, 3.2), 10, Vector3(-1.2, top - 0.1, 0), Vector3.ZERO, 1.0],
+		["box", Vector3(8.22, 0.24, 2.6), 3, Vector3(1.21, 1.33, 0), Vector3(0, 0, -36.6), 1.0],
+		["sphere", 0, 2, Vector3(-1.2, top + 0.85, 0.75), Vector3.ZERO, 0.6, "꼭대기 공", 1.4],
+		["plate", 5, 4, Vector3(-1.2, top + 0.85, -0.78), Vector3(90, 0, 0), 1.3, "별 간판", 1.6],
 	]
-	p.pop_at(2)
 	for z in [-0.75, 0.75]:
-		p.append(["capsule", 1, 4, Vector3(-1.2, 3.05, z), Vector3.ZERO, 0.8, "난간", 1.3])
+		p.append(["capsule", 1, 4, Vector3(-1.2, top + 0.45, z), Vector3.ZERO, 0.8, "난간", 1.3])
+		p.append(["rod", 2, 13, Vector3(1.4, 1.62, z * 0.9), Vector3(0, 0, 53.4), 2.35, "미끄럼 난간", 1.8])
 	for x in [-1.9, -0.5]:
 		for z in [-0.7, 0.7]:
 			p.append(["rod", 2, 11, Vector3(x, 1.25, z), Vector3.ZERO, 1.7])
-	for y in [0.6, 1.2, 1.8]:
-		p.append(["rod", 1, 13, Vector3(-2.15, y, 0), Vector3(90, 0, 0), 1.6, "사다리 칸", 1.0])
+	# 계단 6칸
+	for i in 6:
+		var h := top * (6 - i) / 6.0
+		var x := -2.0 - (i + 0.5) * 0.53
+		p.append(["box", Vector3(0.53, h, 1.3) / 0.5, 13 if i % 2 == 0 else 5, Vector3(x, h * 0.5, 0), Vector3.ZERO, 1.0])
 	_assemble(r, p)
-	_solid(r, Vector3(-1.2, 0, 0), Vector3(1.6, 2.7, 1.6))
+	_solid(r, Vector3(-1.45, 0, 0), Vector3(2.2, top - 0.03, 1.6))
+	_ramp(r, Vector3(-5.9, -0.15, 0), Vector3(-2.35, top, 0), 1.3)
+	_ramp(r, Vector3(-0.4, top, 0), Vector3(2.9, 0.15, 0), 1.3, true)
+	_ramp(r, Vector3(2.9, 0.15, 0), Vector3(3.6, 0.0, 0), 1.3)
 
 
 func _playhouse(r: Node3D) -> void:
@@ -663,6 +698,16 @@ func _wagon(r: Node3D, kind: int) -> void:
 	for x in [-0.8, 0.8]:
 		for z in [-0.62, 0.62]:
 			p.append(["cylinder", 1, 15, Vector3(x, 0.4, z), Vector3(90, 0, 0), 1.0, "화물칸 바퀴", 2.2])
+	if kind == 2:
+		# 객차: 지붕 없는 의자칸 — 올라타서 한 바퀴 돌 수 있다
+		for x in [-0.8, 0.8]:
+			p.append(["plate", 1, 4, Vector3(x, 1.05, 0), Vector3.ZERO, 0.9, "객차 의자", 1.4])
+			p.append(["plate", 2, 4, Vector3(x - 0.22, 1.3, 0), Vector3(0, 0, 90), 0.9, "의자 등받이", 1.2])
+		for z in [-0.6, 0.6]:
+			p.append(["rod", 2, 2, Vector3(0, 1.2, z), Vector3(0, 0, 90), 2.9])
+		p.append(["plate", 6, 8, Vector3(1.3, 1.45, 0), Vector3(0, 0, 90), 0.9, "하트 깃발", 1.2])
+		_assemble(r, p)
+		return
 	if kind == 0:
 		p.append(["cylinder", 0, 3, Vector3(-0.6, 1.25, 0.3), Vector3.ZERO, 1.3, "나무통", 1.8])
 		p.append(["cylinder", 0, 12, Vector3(-0.6, 1.25, -0.32), Vector3.ZERO, 1.3, "나무통", 1.8])
@@ -676,8 +721,9 @@ func _wagon(r: Node3D, kind: int) -> void:
 	_assemble(r, p)
 
 
-func _vehicle(builder: Callable, arg, path: Array, s0: float, speed: float, stops: Array, box: Vector3) -> Dictionary:
+func _vehicle(builder: Callable, arg, path: Array, s0: float, speed: float, stops: Array, box: Vector3, ride_name := "자동차") -> Dictionary:
 	var body := AnimatableBody3D.new()
+	body.set_meta("ride_name", ride_name)
 	body.collision_layer = L_WORLD
 	body.sync_to_physics = true
 	var cs := CollisionShape3D.new()
@@ -703,14 +749,14 @@ func _build_vehicles() -> void:
 	var cols := [2, 8, 4]
 	for i in 3:
 		_vehicle(_car, cols[i], road_path, road_len * i / 3.0, 2.8, [road_len * (i * 0.33 + 0.12)], Vector3(2.3, 1.25, 1.3))
-	# 기차: 역(각도 0)에서 선다
-	var loco := _vehicle(_loco, null, rail_path, 6.0, 3.4, [0.0], Vector3(2.9, 2.8, 1.4))
-	var prev := loco
-	for k in 2:
-		var w := _vehicle(_wagon, k, rail_path, 6.0 - 3.2 * (k + 1), 3.4, [], Vector3(2.7, 1.0, 1.3))
+	# 기차: 역(각도 0)에서 선다. 기관차는 높아서 못 타고, 객차·화물칸은 걸어가면 폴짝 올라탄다
+	var loco := _vehicle(_loco, null, rail_path, 6.0, 3.4, [0.0], Vector3(2.9, 2.2, 1.4), "기관차")
+	var kinds := [2, 0, 1]
+	var names := ["객차", "화물칸", "화물칸"]
+	for k in 3:
+		var w := _vehicle(_wagon, kinds[k], rail_path, 6.0 - 3.2 * (k + 1), 3.4, [], Vector3(2.7, 0.9, 1.3), names[k])
 		w["follow"] = loco
 		w["gap"] = 3.2 * (k + 1)
-		prev = w
 
 
 func _move_vehicle(v: Dictionary, delta: float) -> void:
@@ -879,6 +925,7 @@ func _spawn_actors() -> void:
 		var body := CharacterBody3D.new()
 		body.collision_layer = L_CHAR
 		body.collision_mask = L_WORLD
+		body.floor_snap_length = 0.45
 		var cs := CollisionShape3D.new()
 		var cap := CapsuleShape3D.new()
 		cap.radius = 0.4
@@ -914,8 +961,21 @@ func _give(a: Dictionary, item: Dictionary) -> void:
 		_refresh_hotbar()
 		var how: String = {"tear": "뜯었다", "dig": "팠다"}.get(item["origin"], "주웠다")
 		_toast("%s %s!  (%d/%d)" % [item["name"], how, _inv(a).size(), HOLD_MAX])
+		_pop("+1 " + item["name"], a["body"].global_position + Vector3(0, 2.6, 0))
 	else:
 		_refresh_stack(a)
+
+
+## 머리 위로 떠오르는 글자
+func _pop(s: String, at: Vector3) -> void:
+	var l := UI.label3d(s, 40)
+	l.modulate = Color("#E07A5F")
+	l.position = at
+	world.add_child(l)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(l, "position:y", at.y + 1.2, 0.9).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 0.9).set_delay(0.3)
+	tw.chain().tween_callback(l.queue_free)
 
 
 func _refresh_stack(a: Dictionary) -> void:
@@ -993,21 +1053,71 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 	var vel := body.velocity
 	vel.x = v.x * SPEED
 	vel.z = v.z * SPEED
+	# 미끄럼판 위: 아래로 주르륵
+	if a.get("on_slide", false) and body.is_on_floor():
+		var n := body.get_floor_normal()
+		var down := Vector3(n.x, 0, n.z).normalized()
+		vel.x = v.x * SPEED * 0.35 + down.x * 7.5
+		vel.z = v.z * SPEED * 0.35 + down.z * 7.5
 	if body.is_on_floor():
-		if jump:
+		a["air_t"] = 0.0
+	else:
+		a["air_t"] = a.get("air_t", 0.0) + delta
+	# 가장자리에서 막 떨어진 뒤 0.12초는 아직 뛸 수 있다 (코요테 타임)
+	var leapt := false
+	var grounded: bool = body.is_on_floor() or (a["air_t"] < 0.12 and vel.y <= 0.0)
+	if grounded:
+		# 무릎 높이 턱(차·화물칸·계단 끝)은 걸어가면 알아서 폴짝
+		var flat := Vector3(v.x, 0, v.z)
+		if not jump and flat.length() > 0.5 and body.is_on_wall() and _low_ledge(body, flat.normalized()):
+			vel.y = JUMP_V * 0.8
+			a["air_t"] = 1.0
+			leapt = true
+		elif jump:
 			vel.y = JUMP_V
+			a["air_t"] = 1.0
+			leapt = true
+			a["jumped"] = true
 			if not a["bot"]:
 				Sfx.play("jump", -8.0)
-	else:
+	if not body.is_on_floor() and not leapt:
 		vel.y -= GRAVITY * delta
 	body.velocity = vel
 	body.move_and_slide()
+	# 지금 밟고 있는 것
+	var floor_obj: Object = null
+	if body.is_on_floor():
+		var fp := body.global_position
+		var fq := PhysicsRayQueryParameters3D.create(fp + Vector3(0, 0.3, 0), fp + Vector3(0, -0.35, 0), L_WORLD)
+		var fh := get_world_3d().direct_space_state.intersect_ray(fq)
+		if fh:
+			floor_obj = fh["collider"]
+		for i in body.get_slide_collision_count():
+			var sc := body.get_slide_collision(i)
+			if sc.get_normal().y > 0.5 and (floor_obj == null or sc.get_collider() is AnimatableBody3D):
+				floor_obj = sc.get_collider()
+	a["on_slide"] = floor_obj != null and floor_obj.has_meta("slide")
+	var ride: Object = floor_obj if floor_obj is AnimatableBody3D else null
+	if ride != a.get("ride") and body.is_on_floor():
+		if ride != null and not a["bot"]:
+			_toast("%s에 탔다! — 같이 움직여요 (Space로 뛰어내리기)" % ride.get_meta("ride_name", "차"))
+			Sfx.play("land", -4.0)
+		a["ride"] = ride
 	var moving := Vector2(v.x, v.z).length() > 0.1
 	if moving:
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(-v.x, -v.z), 1.0 - exp(-14.0 * delta))
 		a["walk_t"] += delta
 	var vis: Node3D = a["vis"]
 	vis.position.y = absf(sin(a["walk_t"] * 9.0)) * 0.09 if moving and body.is_on_floor() else lerpf(vis.position.y, 0.0, 0.3)
+
+
+## 앞이 발목~허리 높이에서만 막혀 있으면 올라설 수 있는 턱
+func _low_ledge(body: CharacterBody3D, dir: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	var base := body.global_position
+	var lo := PhysicsRayQueryParameters3D.create(base + Vector3(0, 0.3, 0), base + Vector3(0, 0.3, 0) + dir * 0.8, L_WORLD)
+	var hi := PhysicsRayQueryParameters3D.create(base + Vector3(0, 1.45, 0), base + Vector3(0, 1.45, 0) + dir * 0.9, L_WORLD)
+	return not space.intersect_ray(lo).is_empty() and space.intersect_ray(hi).is_empty()
 
 
 func _human_step(a: Dictionary, delta: float) -> void:
@@ -1018,6 +1128,8 @@ func _human_step(a: Dictionary, delta: float) -> void:
 	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): dir.x -= 1
 	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): dir.x += 1
 	var v := Vector3.ZERO
+	if sim_move != Vector2.ZERO:
+		dir = sim_move
 	if dir != Vector2.ZERO:
 		dir = dir.normalized()
 		v = Basis(Vector3.UP, cam_yaw) * Vector3(dir.x, 0, dir.y)
@@ -1035,8 +1147,14 @@ func _human_step(a: Dictionary, delta: float) -> void:
 				v = to.normalized()
 			else:
 				doing = true
-	_move_body(a, v, delta, jump_req)
+	if jump_req:
+		jump_buf = 0.15        # 착지 직전에 눌러도 착지하자마자 뛴다
 	jump_req = false
+	jump_buf -= delta
+	_move_body(a, v, delta, jump_buf > 0.0)
+	if a.get("jumped", false):
+		jump_buf = 0.0
+		a["jumped"] = false
 	if body.is_on_floor() and not was_floor:
 		Sfx.play("land", -10.0)
 	was_floor = body.is_on_floor()
@@ -1115,37 +1233,79 @@ func _fly(src: Node3D, a: Dictionary) -> void:
 	tw.chain().tween_callback(pc.queue_free)
 
 
-## 원형 게이지 + 손. 대상 위에서 한 바퀴 돌며 차오르고, 손이 오므라들며 당긴다.
+## 손 + 원형 게이지. 뜯는 동안: 캐릭터에서 팔이 쭉 뻗어 대상을 움켜쥐고, 게이지가 한 바퀴 돌면 쏙.
+## 커서가 집을 수 있는 것 위에 있으면 커서 옆에 편 손.
 func _draw_fx() -> void:
-	if act.is_empty() or hold_prog <= 0.0 or not is_instance_valid(act["node"]):
+	var mouse := fx.get_local_mouse_position()
+	var tearing := not act.is_empty() and hold_prog > 0.0 and is_instance_valid(act["node"])
+	if not tearing:
+		if not aim.is_empty() and not aim.get("bolted", false):
+			_draw_hand(mouse + Vector2(26, 30), 0.85, 0.0, 0.0)
 		return
 	var wp: Vector3 = (act["node"] as Node3D).global_position
 	if cam.is_position_behind(wp):
 		return
 	var c := cam.unproject_position(wp)
-	var me := cam.unproject_position(actors[0]["body"].global_position + Vector3(0, 1.2, 0))
-	var R := 34.0
-	fx.draw_circle(c, R + 4, Color(1, 1, 1, 0.55))
-	fx.draw_arc(c, R, 0, TAU, 40, Color(UI.INK, 0.25), 7.0)
-	fx.draw_arc(c, R, -PI / 2, -PI / 2 + TAU * clampf(hold_prog, 0, 1), 40, UI.ACCENT, 7.0)
-	# 손: 진행할수록 손가락이 오므라들고, 캐릭터 쪽으로 끌려간다
-	var hc := c.lerp(me, clampf(hold_prog, 0, 1) * 0.22)
-	var grip := clampf(hold_prog * 1.3, 0.0, 1.0)
+	var me := cam.unproject_position(actors[0]["body"].global_position + Vector3(0, 1.15, 0))
+	var g := clampf(hold_prog, 0, 1)
+	var R := 46.0
+	fx.draw_circle(c, R + 6, Color(1, 1, 1, 0.5))
+	fx.draw_arc(c, R, 0, TAU, 48, Color(UI.INK, 0.22), 9.0)
+	fx.draw_arc(c, R, -PI / 2, -PI / 2 + TAU * g, 48, UI.ACCENT, 9.0)
+	fx.draw_circle(c + Vector2(cos(-PI / 2 + TAU * g), sin(-PI / 2 + TAU * g)) * R, 7.0, Color.WHITE)
+	# 팔: 캐릭터 → 손. 진행할수록 손이 캐릭터 쪽으로 당겨진다
+	var hc := c.lerp(me, g * 0.28)
 	var skin := Color("#F6D2B0")
 	var ink := Color(UI.INK, 0.9)
-	var palm := Rect2(hc + Vector2(-10, -2), Vector2(20, 18))
+	var wob := Vector2(sin(Time.get_ticks_msec() * 0.04), cos(Time.get_ticks_msec() * 0.05)) * 2.5 * g
+	fx.draw_line(me, hc + wob, ink, 13.0)
+	fx.draw_line(me, hc + wob, skin, 9.0)
+	fx.draw_circle(me, 6.5, ink)
+	fx.draw_circle(me, 4.5, skin)
+	var ang := (hc - me).angle() + PI / 2
+	_draw_hand(hc + wob, 2.1, clampf(g * 1.4, 0.0, 1.0), ang)
+
+
+## 만화 손. s 크기, grip 0(편 손)~1(쥔 주먹), rot 손목→손끝 방향 회전
+func _draw_hand(at: Vector2, s: float, grip: float, rot: float) -> void:
+	var skin := Color("#F6D2B0")
+	var ink := Color(UI.INK, 0.9)
+	var xf := Transform2D(rot, at)
+	var caps := []   # [a, b, width]
+	# 손가락 4개: 마디 두 개, 쥘수록 접힌다
 	for i in 4:
-		var fx0 := hc.x - 9 + i * 6
-		var flen := lerpf(16.0, 5.0, grip) - (2.0 if i == 0 or i == 3 else 0.0)
-		var fr := Rect2(Vector2(fx0, hc.y - 2 - flen), Vector2(5, flen + 2))
-		fx.draw_rect(fr, skin)
-		fx.draw_rect(fr, ink, false, 1.2)
-	fx.draw_rect(palm, skin)
-	fx.draw_rect(palm, ink, false, 1.5)
-	var th0 := hc + Vector2(-10, 6)
-	var th1 := th0 + Vector2(lerpf(-9, 2, grip), lerpf(-8, -4, grip))
-	fx.draw_line(th0, th1, ink, 7.0)
-	fx.draw_line(th0, th1, skin, 4.5)
+		var bx := (-7.5 + i * 5.0) * s
+		var base := Vector2(bx, -6 * s)
+		var l1 := (8.0 - (1.5 if i == 0 or i == 3 else 0.0)) * s
+		var a1 := lerpf(0.0, 1.1, grip) + (i - 1.5) * 0.08 * (1.0 - grip)
+		var k := base + Vector2(sin(a1 * 0.3 + (i - 1.5) * 0.06), -cos(a1 * 0.3)) * l1
+		var a2 := lerpf(0.0, 2.3, grip)
+		var tip := k + Vector2(0, -1).rotated(a2) * l1 * 0.8
+		caps.append([base, k, 5.2 * s])
+		caps.append([k, tip, 5.0 * s])
+	# 엄지
+	var tb := Vector2(-10 * s, 3 * s)
+	var tt := tb + Vector2(-7, -6).lerp(Vector2(3, -7), grip) * s
+	caps.append([tb, tt, 5.6 * s])
+	# 외곽선 먼저, 살색 위에
+	for layer in 2:
+		var col := ink if layer == 0 else skin
+		var grow := 2.4 if layer == 0 else 0.0
+		for cp in caps:
+			var p0: Vector2 = xf * (cp[0] as Vector2)
+			var p1: Vector2 = xf * (cp[1] as Vector2)
+			var w: float = cp[2] + grow
+			fx.draw_line(p0, p1, col, w)
+			fx.draw_circle(p0, w * 0.5, col)
+			fx.draw_circle(p1, w * 0.5, col)
+		# 손바닥
+		var palm := PackedVector2Array()
+		for j in 12:
+			var t := TAU * j / 12.0
+			palm.append(xf * Vector2(cos(t) * (11.5 * s + grow * 0.5), 2 * s + sin(t) * (9.5 * s + grow * 0.5)))
+		fx.draw_colored_polygon(palm, col)
+	# 손목 소매
+	fx.draw_line(xf * Vector2(-8 * s, 12 * s), xf * Vector2(8 * s, 12 * s), UI.ACCENT, 4.0 * s)
 
 
 ## 마우스 커서 아래 있는 것 (커서는 늘 자유롭게 움직인다)
@@ -1161,6 +1321,8 @@ func _update_aim() -> void:
 			var e: Dictionary = pc.get_meta("entry")
 			if e["alive"] and pc.visible:
 				best = e
+	if best.is_empty():
+		best = _near_cursor(mouse)
 	if best != aim:
 		if not aim.is_empty() and is_instance_valid(aim["node"]) and not aim.get("bolted", false) and aim != act:
 			(aim["node"] as Piece).set_highlight(false)
@@ -1175,7 +1337,7 @@ func _update_aim() -> void:
 	var far: bool = (target["node"] as Node3D).global_position.distance_to(me) > REACH
 	var verb := "클릭 — 가서 " if far else "클릭 — "
 	if target == act and aim.is_empty():
-		verb = "가는 중 — "
+		verb = "뜯는 중 — " if hold_prog > 0.0 else "가는 중 — "
 	if target.has("hold"):
 		if target["bolted"]:
 			var t: String = target["item"]["type"]
@@ -1187,6 +1349,25 @@ func _update_aim() -> void:
 			hud_prompt.text = "%s%s 뜯기 → %s" % [verb, target["name"], target["item"]["name"]]
 	else:
 		hud_prompt.text = "%s줍기 — %s (%s)" % [verb, target["item"]["name"], Data.palette()[target["item"]["color"]]["name"]]
+
+
+## 레이가 빗나갔을 때: 커서에서 화면상 40px 안, 가장 가까운 집을 수 있는 것
+func _near_cursor(mouse: Vector2) -> Dictionary:
+	var best: Dictionary = {}
+	var bd := 40.0
+	var me: Vector3 = actors[0]["body"].global_position
+	for list in [ground, tears]:
+		for e in list:
+			if not e["alive"] or not is_instance_valid(e["node"]) or not (e["node"] as Node3D).visible:
+				continue
+			var wp: Vector3 = (e["node"] as Node3D).global_position
+			if wp.distance_to(me) > 30.0 or cam.is_position_behind(wp):
+				continue
+			var d := cam.unproject_position(wp).distance_to(mouse)
+			if d < bd:
+				bd = d
+				best = e
+	return best
 
 
 func _drop_selected() -> void:
@@ -1485,6 +1666,12 @@ func _toast(s: String) -> void:
 
 
 func _update_hud(delta: float) -> void:
+	for w in [30, 10, 5, 4, 3, 2, 1]:
+		if time_left <= w and not warned.has(w):
+			warned[w] = true
+			Sfx.play("tick" if w <= 5 else "error", -2.0)
+			if w == 30 or w == 10:
+				_toast("수집 %d초 남았어요!" % w)
 	hud_time.text = "수집 " + UI.clock(time_left)
 	hud_time.add_theme_color_override("font_color", UI.BAD if time_left < 30 else UI.INK)
 	toast_t -= delta
@@ -1553,3 +1740,68 @@ func _end() -> void:
 				inv.append(Data.random_item(Data.TYPES[rng.randi() % Data.TYPES.size()], "auto", rng))
 	Sfx.play("whoosh", -6.0)
 	Game.goto("build")
+
+
+# ── 시나리오 테스트 (--scenario=ride|slide|hand) ─────────
+
+func run_scenario(sc: String) -> void:
+	await get_tree().process_frame
+	time_left = 999.0
+	var me: Dictionary = actors[0]
+	var body: CharacterBody3D = me["body"]
+	match sc:
+		"ride":
+			var w: Dictionary = vehicles[4]   # 객차
+			for v in vehicles:
+				v["speed"] = 0.0 if v["follow"] == null else v["speed"]
+			await get_tree().physics_frame
+			var wb: Node3D = w["body"]
+			var side := wb.global_transform.basis.z
+			body.global_position = wb.global_position + side * 2.2 + Vector3(0, 0.1, 0)
+			cam_yaw = atan2(side.x, side.z)   # 카메라 뒤 = 바깥, 앞 = 객차
+			sim_move = Vector2(0, -1)   # 카메라 기준 앞으로 = 화차 쪽
+			for i in 90:
+				await get_tree().physics_frame
+				if me.get("ride") != null:
+					sim_move = Vector2.ZERO
+				if i % 6 == 0:
+					print("[ride] f%d rel=%s floor=%s wall=%s" % [i, str(wb.global_transform.affine_inverse() * body.global_position), body.is_on_floor(), body.is_on_wall()])
+			sim_move = Vector2.ZERO
+			print("[ride] on=%s y=%.2f floor=%s rel=%s" % [str(me.get("ride")), body.global_position.y, body.is_on_floor(), str(wb.global_transform.affine_inverse() * body.global_position)])
+			for v in vehicles:
+				if v["follow"] == null:
+					v["speed"] = 3.4
+			var p0 := body.global_position
+			var w0 := wb.global_position
+			for i in 120:
+				await get_tree().physics_frame
+			print("[ride] wagon moved %.2f, player moved %.2f, ride=%s" % [w0.distance_to(wb.global_position), p0.distance_to(body.global_position), me.get("ride") != null])
+		"slide":
+			var root := Vector3(10.5, 0, -5)
+			body.global_position = root + Vector3(-7.0, 0.1, 0)
+			cam_yaw = -PI / 2   # 카메라가 +x를 본다
+			sim_move = Vector2(0, -1)
+			var top := 0.0
+			for i in 150:
+				await get_tree().physics_frame
+				top = maxf(top, body.global_position.y)
+				if i % 15 == 0:
+					print("[slide] t=%d x=%.2f y=%.2f slide=%s" % [i, body.global_position.x - root.x, body.global_position.y, me.get("on_slide", false)])
+			sim_move = Vector2.ZERO
+			print("[slide] max height %.2f, end x=%.2f y=%.2f" % [top, body.global_position.x - root.x, body.global_position.y])
+		"hand":
+			var best: Dictionary = {}
+			var bd := 1e9
+			for e in tears:
+				if e["alive"] and not e["bolted"] and not e["dig"]:
+					var d: float = (e["node"] as Node3D).global_position.distance_to(body.global_position)
+					if d < bd:
+						bd = d
+						best = e
+			body.global_position = (best["node"] as Node3D).global_position + Vector3(1.5, 0, 0)
+			body.global_position.y = 0.1
+			act = best
+			best["hold"] = 6.0
+	print("[scenario] done")
+	if sc != "hand":
+		get_tree().quit()

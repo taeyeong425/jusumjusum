@@ -7,6 +7,7 @@ var chart: Control
 var reveal_t := 0.0
 var verdict_l: Label
 var detail_l: Label
+var stand_l: Label
 var buttons: HBoxContainer
 var shown := false
 
@@ -87,6 +88,9 @@ func _build_ui(c_ok: bool, r_ok: bool) -> void:
 
 	detail_l = UI.label("", 20, Color(chalk, 0.75))
 	col.add_child(detail_l)
+	stand_l = UI.label("", 22, Color("#FFE08A"), true)
+	stand_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(stand_l)
 	buttons = UI.hbox(16)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.visible = false
@@ -101,7 +105,7 @@ func _process(delta: float) -> void:
 		_show_verdict()
 	if Game.autotest and shown and reveal_t > 4.0:
 		set_process(false)
-		if verdict["pass"] and Game.round_i < Data.QUOTA.size() and Game.round_i < 3:
+		if Game.round_i < Game.ROUNDS:
 			_next_round()
 		else:
 			_to_gallery()
@@ -119,17 +123,28 @@ func _show_verdict() -> void:
 	detail_l.text = "내 작품 평점 ★%.1f (봇이 본 닮음 %.0f%%) · 이번 판 기록 %d라운드" % [me_avg, result["scores"][0] * 100, Game.round_i]
 	for c in buttons.get_children():
 		c.queue_free()
-	if v["pass"]:
-		if Game.round_i >= Data.QUOTA.size():
-			buttons.add_child(UI.button("완주! 전시회 보러 가기 →", _to_gallery, 28))
-		else:
-			buttons.add_child(UI.button("다음 라운드 →", _next_round, 30))
+	if not v["pass"] and Game.tickets >= 3 and not Game.lowered_this_round:
+		buttons.add_child(UI.button("티켓 3장으로 할당량 한 단계 낮추기", _lower, 24))
+	if Game.round_i < Game.ROUNDS:
+		buttons.add_child(UI.button("다음 라운드 (%d / %d) →" % [Game.round_i + 1, Game.ROUNDS], _next_round, 30))
 	else:
-		if Game.tickets >= 3 and not Game.lowered_this_round:
-			buttons.add_child(UI.button("티켓 3장으로 할당량 한 단계 낮추기", _lower, 24))
-		buttons.add_child(UI.button("전시회 보러 가기 →", _to_gallery, 28))
+		buttons.add_child(UI.button("최종 결과 · 전시회 보러 가기 →", _to_gallery, 28))
 	buttons.visible = true
 	_store_history()
+	_show_standings()
+
+
+## 지금까지 전체 등수 (라운드 평점 합계)
+func _show_standings() -> void:
+	var letters: Dictionary = Game.get_meta("letters")
+	var parts := []
+	var rank := 0
+	for row in Game.standings():
+		rank += 1
+		var i: int = row["i"]
+		var nm: String = "나" if i == 0 else Game.players[i]["name"]
+		parts.append(("%d등 %s %.1f" % [rank, nm, row["total"]]) if i != 0 else ("[%d등 나 %.1f]" % [rank, row["total"]]))
+	stand_l.text = "전체 등수 (%d라운드 합계)  " % Game.history.size() + "  ·  ".join(parts)
 
 
 func _store_history() -> void:
@@ -159,9 +174,12 @@ func _next_round() -> void:
 
 
 func _to_gallery() -> void:
-	var reached := Game.round_i + (1 if verdict["pass"] else 0)
-	Game.set_meta("reached", reached)
-	Game.save_record(Game.round_i if not verdict["pass"] else Game.round_i)
+	var passed := 0
+	for rec in Game.history:
+		if rec["pass"]:
+			passed += 1
+	Game.set_meta("reached", passed)
+	Game.save_record(passed)
 	Game.goto("gallery")
 
 
@@ -191,6 +209,8 @@ func _draw_chart() -> void:
 		var nm: String = "내 것" if i == 0 else letters.get(i, "?")
 		chart.draw_string(font, Vector2(x, base_y + 30), nm, HORIZONTAL_ALIGNMENT_CENTER, bw, 26, Color("#F4F1E6"))
 		chart.draw_string(font, Vector2(x, base_y - hgt - 8), "★%.1f" % avg[i], HORIZONTAL_ALIGNMENT_CENTER, bw, 24, Color("#F4F1E6"))
+		if k == 0 and grow >= 1.0:
+			chart.draw_string(font, Vector2(x, base_y - hgt - 38), "1등", HORIZONTAL_ALIGNMENT_CENTER, bw, 26, Color("#FFD34D"))
 	# 기준선 — 1.2초 뒤에 그어진다
 	if reveal_t > 1.2:
 		var ly: float = base_y - verdict["th"] * scale_y

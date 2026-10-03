@@ -4,6 +4,7 @@ extends Node
 signal phase_changed(name: String)
 
 const PLAYERS := 6
+const ROUNDS := 3                # 한 판은 무조건 3라운드. 할당량은 라운드마다 통과/실패만 기록
 
 var rng := RandomNumberGenerator.new()
 var short_mode := false
@@ -81,6 +82,31 @@ func _setup_round() -> void:
 func next_round() -> void:
 	round_i += 1
 	_setup_round()
+
+
+## 전체 등수: 라운드 평점 합계 (높은 순). [{"i", "total", "per": [라운드별]}]
+func standings() -> Array:
+	var rows := []
+	for i in players.size():
+		var per := []
+		var tot := 0.0
+		for rec in history:
+			var v: float = rec["avg"][i]
+			per.append(v)
+			tot += v
+		rows.append({"i": i, "total": tot, "per": per})
+	rows.sort_custom(func(a, b): return a["total"] > b["total"])
+	return rows
+
+
+## 라운드 1등 작품 (평점 최고)
+static func round_top(rec: Dictionary) -> int:
+	var avg: Array = rec["avg"]
+	var best := 0
+	for i in avg.size():
+		if avg[i] > avg[best]:
+			best = i
+	return best
 
 
 func human() -> Dictionary:
