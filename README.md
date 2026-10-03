@@ -4,6 +4,8 @@
 
 Godot 4.7 · 웹(HTML5) 빌드 · 플레이어 1명 + 봇 5명
 
+**▶ 바로 하기: https://taeyeong425.github.io/jusumjusum/** (PC 브라우저 · 크롬 권장)
+
 ## 한 라운드
 
 | 페이즈 | 시간 | 하는 일 |
