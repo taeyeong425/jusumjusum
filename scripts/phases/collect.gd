@@ -6,7 +6,7 @@ extends Node3D
 const SPEED := 5.0
 const GRAVITY := 22.0
 const JUMP_V := 8.6
-const HOLD_MAX := 12
+const HOLD_MAX := 15
 const REACH := 3.6
 const AIM_DEG := 20.0
 const PEEK_R := 7.0
@@ -134,7 +134,7 @@ func _assemble(root: Node3D, parts: Array) -> void:
 		pc.mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(pc)
 		if true:
-			var item := Data.make_item(t, shp, p[2], "tear")
+			var item := Data.make_item(t, shp, p[2], "tear", root.get_meta("src", "town"))
 			var hold: float = float(p[7]) if p.size() > 7 else 1.6
 			if root is AnimatableBody3D:
 				hold = maxf(0.6, hold * 0.35)   # 움직이는 차·기차 부품은 쫓아가서 잠깐 잡으면 된다
@@ -200,6 +200,8 @@ func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, slide := false)
 
 func _place(builder: Callable, pos: Vector3, yaw := 0.0, arg = null) -> Node3D:
 	var root := Node3D.new()
+	var play := ["_swing", "_seesaw", "_slide", "_playhouse", "_sand_toys"]
+	root.set_meta("src", "play" if builder.get_method() in play else "town")
 	root.position = pos
 	root.rotation.y = yaw
 	world.add_child(root)
@@ -304,7 +306,7 @@ func _build_ground() -> void:
 	pm.size = Vector2(140, 140)
 	outer.mesh = pm
 	outer.position.y = -0.02
-	outer.material_override = Data.brick(Color("#3F8C3C"), true, 0.25, 0.6)   # 바깥 = 진한 초록 바닥판
+	outer.material_override = Data.brick(Color("#6FA35A"), false, 0.25, 0.8)
 	world.add_child(outer)
 	# 울타리 안쪽 잔디 (불규칙한 다각형)
 	var st := SurfaceTool.new()
@@ -317,7 +319,7 @@ func _build_ground() -> void:
 			st.add_vertex(Vector3(v.x, 0.0, v.y))
 	var lawn := MeshInstance3D.new()
 	lawn.mesh = st.commit()
-	lawn.material_override = Data.brick(Color("#5FAE4E"), true, 0.25, 0.55)   # 놀이터 = 초록 바닥판(스터드)
+	lawn.material_override = Data.brick(Color("#8CC26E"), false, 0.25, 0.75)   # 잔디
 	world.add_child(lawn)
 	var floor_body := StaticBody3D.new()
 	floor_body.collision_layer = L_WORLD
@@ -371,14 +373,6 @@ func _build_ground() -> void:
 			"bolted": false, "dig": true, "uses": 3}
 		mound.set_meta("entry", e)
 		tears.append(e)
-	var signs := [
-		[Vector3(0, 2.6, 0), "모래밭 — 파면 나와요"],
-		[Vector3(29.5, 4.2, 0), "기차역"],
-	]
-	for s in signs:
-		var l := UI.label3d(s[1], 64)
-		l.position = s[0]
-		world.add_child(l)
 
 
 # ── 놀이터 ───────────────────────────────────────────
@@ -671,8 +665,8 @@ func _path_at(path: Array, cum: Array, s: float) -> Array:
 
 func _car(r: Node3D, col: int) -> void:
 	var p := [
-		["box", Vector3(4.4, 1.5, 2.3), col, Vector3(0, 0.62, 0), Vector3.ZERO, 1.0],
-		["box", Vector3(2.4, 1.0, 2.0), 7, Vector3(-0.25, 1.25, 0), Vector3.ZERO, 1.0],
+		["box", Vector3(4.4, 1.5, 2.3), col, Vector3(0, 0.62, 0), Vector3.ZERO, 1.0, "자동차 차체", 2.0],
+		["box", Vector3(2.4, 1.0, 2.0), 7, Vector3(-0.25, 1.25, 0), Vector3.ZERO, 1.0, "자동차 지붕", 1.6],
 		["rod", 2, 14, Vector3(-0.6, 1.95, 0.35), Vector3.ZERO, 0.5, "안테나", 0.9],
 	]
 	for x in [-0.75, 0.75]:
@@ -688,8 +682,8 @@ func _car(r: Node3D, col: int) -> void:
 func _loco(r: Node3D) -> void:
 	var p := [
 		["box", Vector3(5.6, 0.8, 2.6), 15, Vector3(0, 0.55, 0), Vector3.ZERO, 1.0],
-		["cylinder", Vector3(2.0, 3.6, 2.0), 2, Vector3(0.55, 1.35, 0), Vector3(0, 0, 90), 1.0],
-		["box", Vector3(2.6, 2.6, 2.6), 2, Vector3(-0.85, 1.55, 0), Vector3.ZERO, 1.0],
+		["cylinder", Vector3(2.0, 3.6, 2.0), 2, Vector3(0.55, 1.35, 0), Vector3(0, 0, 90), 1.0, "기관차 보일러", 2.4],
+		["box", Vector3(2.6, 2.6, 2.6), 2, Vector3(-0.85, 1.55, 0), Vector3.ZERO, 1.0, "기관차 운전실", 2.4],
 		["cylinder", 2, 15, Vector3(1.25, 2.25, 0), Vector3.ZERO, 0.75, "기차 굴뚝", 2.2],
 		["cone", 2, 15, Vector3(1.25, 2.85, 0), Vector3(180, 0, 0), 0.75, "굴뚝 깔때기", 1.5],
 		["sphere", 0, 4, Vector3(1.7, 1.35, 0), Vector3.ZERO, 0.55, "기차 전조등", 1.2],
@@ -734,6 +728,7 @@ func _wagon(r: Node3D, kind: int) -> void:
 func _vehicle(builder: Callable, arg, path: Array, s0: float, speed: float, stops: Array, box: Vector3, ride_name := "자동차") -> Dictionary:
 	var body := AnimatableBody3D.new()
 	body.set_meta("ride_name", ride_name)
+	body.set_meta("src", "car" if ride_name == "자동차" else "train")
 	body.collision_layer = L_WORLD
 	body.sync_to_physics = true
 	var cs := CollisionShape3D.new()
@@ -891,46 +886,40 @@ func _add_ground(item: Dictionary, p: Vector3) -> void:
 # ── 캐릭터 (덩어리로 지은 아이 · 동물) ─────────────────
 
 func _character(i: int) -> Node3D:
-	# 미니피겨: 다리 · 골반 · 몸통 · 팔 · 손 · 노란 원통 머리 + 머리 위 스터드. 동물 친구는 귀 · 부리로 구분
+	# 장난감 인형: 통통한 몸통 · 둥근 머리 · 눈 · 볼. 동물 친구는 귀 · 부리로 구분 (미니피겨형은 v0.5에서 뺐다)
 	var p: Dictionary = Game.players[i]
 	var c: int = p["color"]
 	var root := Node3D.new()
-	var skin := 4
+	var head := 0
 	var parts := [
-		["box", Vector3(0.52, 1.2, 0.64), 9, Vector3(-0.14, 0.3, 0), Vector3.ZERO, 1.0],
-		["box", Vector3(0.52, 1.2, 0.64), 9, Vector3(0.14, 0.3, 0), Vector3.ZERO, 1.0],
-		["box", Vector3(1.12, 0.24, 0.64), 15, Vector3(0, 0.66, 0), Vector3.ZERO, 1.0],
-		["box", Vector3(1.2, 1.12, 0.68), c, Vector3(0, 1.02, 0), Vector3.ZERO, 1.0],
-		["capsule", Vector3(0.8, 0.85, 0.8), c, Vector3(-0.38, 1.02, 0), Vector3(0, 0, -12), 1.0],
-		["capsule", Vector3(0.8, 0.85, 0.8), c, Vector3(0.38, 1.02, 0), Vector3(0, 0, 12), 1.0],
-		["cylinder", Vector3(0.36, 0.25, 0.36), skin, Vector3(-0.43, 0.74, -0.04), Vector3.ZERO, 1.0],
-		["cylinder", Vector3(0.36, 0.25, 0.36), skin, Vector3(0.43, 0.74, -0.04), Vector3.ZERO, 1.0],
-		["cylinder", Vector3(0.5, 0.1, 0.5), skin, Vector3(0, 1.33, 0), Vector3.ZERO, 1.0],
-		["cylinder", Vector3(0.88, 0.72, 0.88), skin, Vector3(0, 1.53, 0), Vector3.ZERO, 1.0],
-		["cylinder", Vector3(0.48, 0.2, 0.48), skin, Vector3(0, 1.78, 0), Vector3.ZERO, 1.0],
-		["sphere", 0, 15, Vector3(-0.08, 1.57, -0.215), Vector3.ZERO, 0.1],
-		["sphere", 0, 15, Vector3(0.08, 1.57, -0.215), Vector3.ZERO, 0.1],
-		["box", Vector3(0.28, 0.06, 0.04), 15, Vector3(0, 1.47, -0.22), Vector3.ZERO, 1.0],
+		["capsule", Vector3(1.9, 1.05, 1.9), c, Vector3(0, 0.55, 0), Vector3.ZERO, 1.0],
+		["sphere", Vector3(1.1, 1.0, 1.1), head, Vector3(0, 1.36, 0), Vector3.ZERO, 1.0],
+		["sphere", 0, 15, Vector3(-0.11, 1.42, -0.3), Vector3.ZERO, 0.12],
+		["sphere", 0, 15, Vector3(0.11, 1.42, -0.3), Vector3.ZERO, 0.12],
+		["sphere", 0, 1, Vector3(-0.2, 1.3, -0.25), Vector3.ZERO, 0.12],
+		["sphere", 0, 1, Vector3(0.2, 1.3, -0.25), Vector3.ZERO, 0.12],
+		["capsule", Vector3(0.8, 0.6, 0.8), c, Vector3(-0.36, 0.72, -0.05), Vector3(0, 0, -25), 1.0],
+		["capsule", Vector3(0.8, 0.6, 0.8), c, Vector3(0.36, 0.72, -0.05), Vector3(0, 0, 25), 1.0],
 	]
 	match p["name"]:
 		"나":
-			parts.append(["hemi", Vector3(0.82, 0.62, 0.82), 8, Vector3(0, 1.8, 0.01), Vector3.ZERO, 1.0])
-			parts.append(["plate", Vector3(0.45, 0.6, 0.5), 8, Vector3(0, 1.77, -0.25), Vector3.ZERO, 1.0])
+			parts.append(["hemi", Vector3(1.15, 0.8, 1.15), 8, Vector3(0, 1.58, 0.01), Vector3.ZERO, 1.0])
+			parts.append(["plate", Vector3(0.45, 0.6, 0.55), 8, Vector3(0, 1.56, -0.3), Vector3.ZERO, 1.0])
 		"곰돌이":
-			parts.append(["sphere", 0, 12, Vector3(-0.17, 1.8, 0), Vector3.ZERO, 0.32])
-			parts.append(["sphere", 0, 12, Vector3(0.17, 1.8, 0), Vector3.ZERO, 0.32])
+			parts.append(["sphere", 0, 12, Vector3(-0.22, 1.62, 0), Vector3.ZERO, 0.32])
+			parts.append(["sphere", 0, 12, Vector3(0.22, 1.62, 0), Vector3.ZERO, 0.32])
 		"토끼":
-			parts.append(["capsule", Vector3(0.6, 0.8, 0.6), 1, Vector3(-0.1, 1.98, 0), Vector3(0, 0, 8), 1.0])
-			parts.append(["capsule", Vector3(0.6, 0.8, 0.6), 1, Vector3(0.1, 1.98, 0), Vector3(0, 0, -8), 1.0])
+			parts.append(["capsule", Vector3(0.7, 0.9, 0.7), 1, Vector3(-0.12, 1.85, 0), Vector3(0, 0, 8), 1.0])
+			parts.append(["capsule", Vector3(0.7, 0.9, 0.7), 1, Vector3(0.12, 1.85, 0), Vector3(0, 0, -8), 1.0])
 		"펭귄":
-			parts.append(["hemi", Vector3(0.82, 0.62, 0.82), 15, Vector3(0, 1.8, 0.01), Vector3.ZERO, 1.0])
-			parts.append(["cone", Vector3(0.3, 0.3, 0.3), 3, Vector3(0, 1.52, -0.26), Vector3(-90, 0, 0), 1.0])
+			parts.append(["hemi", Vector3(1.15, 0.8, 1.15), 15, Vector3(0, 1.58, 0.01), Vector3.ZERO, 1.0])
+			parts.append(["cone", Vector3(0.3, 0.3, 0.3), 3, Vector3(0, 1.34, -0.34), Vector3(-90, 0, 0), 1.0])
 		"여우":
-			parts.append(["cone", Vector3(0.45, 0.5, 0.45), 3, Vector3(-0.13, 1.88, 0), Vector3(0, 0, 12), 1.0])
-			parts.append(["cone", Vector3(0.45, 0.5, 0.45), 3, Vector3(0.13, 1.88, 0), Vector3(0, 0, -12), 1.0])
+			parts.append(["cone", Vector3(0.5, 0.55, 0.5), 3, Vector3(-0.17, 1.7, 0), Vector3(0, 0, 14), 1.0])
+			parts.append(["cone", Vector3(0.5, 0.55, 0.5), 3, Vector3(0.17, 1.7, 0), Vector3(0, 0, -14), 1.0])
 		"고양이":
-			parts.append(["cone", Vector3(0.4, 0.4, 0.4), 14, Vector3(-0.13, 1.86, 0), Vector3(0, 0, 14), 1.0])
-			parts.append(["cone", Vector3(0.4, 0.4, 0.4), 14, Vector3(0.13, 1.86, 0), Vector3(0, 0, -14), 1.0])
+			parts.append(["cone", Vector3(0.42, 0.45, 0.42), 14, Vector3(-0.17, 1.68, 0), Vector3(0, 0, 14), 1.0])
+			parts.append(["cone", Vector3(0.42, 0.45, 0.42), 14, Vector3(0.17, 1.68, 0), Vector3(0, 0, -14), 1.0])
 	for q in parts:
 		var shp := _shape_of(q[0], q[1])
 		var pc := Piece.new().setup(q[0], q[2], false, shp)
@@ -1140,9 +1129,6 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 	a["on_slide"] = floor_obj != null and floor_obj.has_meta("slide")
 	var ride: Object = floor_obj if floor_obj is AnimatableBody3D else null
 	if ride != a.get("ride") and body.is_on_floor():
-		if ride != null and not a["bot"]:
-			_toast("%s에 탔다! — 같이 움직여요 (Space로 뛰어내리기)" % ride.get_meta("ride_name", "차"))
-			Sfx.play("land", -4.0)
 		a["ride"] = ride
 	var moving := Vector2(v.x, v.z).length() > 0.1
 	if moving:
@@ -1276,10 +1262,11 @@ func _human_step(a: Dictionary, delta: float) -> void:
 	var v := Vector3.ZERO
 	if sim_move != Vector2.ZERO:
 		dir = sim_move
-	if dir != Vector2.ZERO:
+	var manual := dir != Vector2.ZERO
+	if manual:
 		dir = dir.normalized()
 		v = Basis(Vector3.UP, cam_yaw) * Vector3(dir.x, 0, dir.y)
-		_cancel_act()   # 직접 움직이면 자동 이동 취소
+		# v0.5: 직접 움직여도 고른 건 안 놓는다 — 손 닿는 거리면 움직이면서 줍고 뜯는다 (자동 걷기만 멈춤)
 	# 클릭한 것을 하러 간다
 	var doing := false
 	if not act.is_empty():
@@ -1290,9 +1277,12 @@ func _human_step(a: Dictionary, delta: float) -> void:
 			var to := Vector3(tp.x - body.position.x, 0, tp.z - body.position.z)
 			var reach := 1.4 if not act.has("hold") else 2.2
 			if (act["node"] as Node).has_meta("moving"):
-				reach = 3.2   # 움직이는 차 · 기차는 조금 멀어도 손을 뻗어 잡는다
+				reach = 3.6   # 움직이는 차 · 기차는 조금 멀어도 손을 뻗어 잡는다
 			if to.length() <= reach:
 				doing = true
+			elif manual:
+				if to.length() > 14.0:
+					_cancel_act()   # 멀리 가 버리면 놓는다
 			else:
 				# 목표가 움직였거나(차 · 기차) 길이 없으면 다시 찾는다
 				if path_goal.distance_to(tp) > 1.0 or (path_i >= path.size() and path_t <= 0.0):
@@ -1336,7 +1326,7 @@ func _human_step(a: Dictionary, delta: float) -> void:
 			Sfx.play("step", -16.0, 0.12)
 	hud_bar.visible = false
 	if not doing:
-		hold_prog = 0.0
+		hold_prog = maxf(0.0, hold_prog - delta * 1.5)   # 잠깐 손이 떨어져도 게이지가 바로 날아가지 않는다
 		_wobble(false)
 		return
 	if _inv(a).size() >= HOLD_MAX:
@@ -1350,7 +1340,8 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		_cancel_act()
 		return
 	# 뜯기: 도착하면 알아서 끝까지 (손 뗄 필요 없음)
-	body.rotation.y = lerp_angle(body.rotation.y, atan2(-((act["node"] as Node3D).global_position.x - body.position.x), -((act["node"] as Node3D).global_position.z - body.position.z)), 0.3)
+	if not manual:
+		body.rotation.y = lerp_angle(body.rotation.y, atan2(-((act["node"] as Node3D).global_position.x - body.position.x), -((act["node"] as Node3D).global_position.z - body.position.z)), 0.3)
 	hold_prog += delta / (act["hold"] * TEAR_TIME)
 	tick_t -= delta
 	if tick_t <= 0:
@@ -1920,9 +1911,9 @@ func _slot_box(sel: bool) -> StyleBoxFlat:
 	if _sb_cache.has(sel):
 		return _sb_cache[sel]
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#FBEFD9") if not sel else Color("#FFE3A8")
+	sb.bg_color = Color("#F3F5F7") if not sel else Color("#FFF1EC")
 	sb.set_corner_radius_all(8)
-	sb.border_color = UI.ACCENT if sel else Color("#D9C3A5")
+	sb.border_color = UI.ACCENT if sel else Color("#D5DADF")
 	sb.set_border_width_all(3 if sel else 2)
 	_sb_cache[sel] = sb
 	return sb

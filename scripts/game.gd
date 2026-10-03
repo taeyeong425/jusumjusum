@@ -5,6 +5,7 @@ signal phase_changed(name: String)
 
 const PLAYERS := 6
 const ROUNDS := 3                # 한 판은 무조건 3라운드. 할당량은 라운드마다 통과/실패만 기록
+const CARD_BONUS := 0.5         # 카드 성공 = 그 라운드 점수 +0.5 (전체 등수)
 
 var rng := RandomNumberGenerator.new()
 var short_mode := false
@@ -34,11 +35,11 @@ func _ready() -> void:
 
 
 func t_collect() -> float:
-	return 4.0 if autotest else (60.0 if short_mode else 120.0)
+	return 4.0 if autotest else (80.0 if short_mode else 150.0)
 
 
 func t_build() -> float:
-	return 2.0 if autotest else (120.0 if short_mode else 210.0)
+	return 2.0 if autotest else (150.0 if short_mode else 270.0)
 
 
 func t_exhibit() -> float:
@@ -92,6 +93,8 @@ func standings() -> Array:
 		var tot := 0.0
 		for rec in history:
 			var v: float = rec["avg"][i]
+			if rec.get("cards", []).size() > i and rec["cards"][i]:
+				v += CARD_BONUS   # 카드 성공 보너스
 			per.append(v)
 			tot += v
 		rows.append({"i": i, "total": tot, "per": per})

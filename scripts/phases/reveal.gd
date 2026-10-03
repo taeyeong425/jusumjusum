@@ -60,7 +60,7 @@ func _ready() -> void:
 		var bar := ColorRect.new()
 		var c: int = Game.counts[t]
 		bar.custom_minimum_size = Vector2(maxf(4.0, 160.0 * c / mx), 18)
-		bar.color = UI.BAD if c <= 3 else (UI.ACCENT if c >= 40 else Color("#C9A27A"))
+		bar.color = UI.BAD if c <= 3 else (UI.ACCENT if c >= 40 else Color("#9AA5AF"))
 		h.add_child(bar)
 		h.add_child(UI.label(str(c), 20, UI.SOFT))
 		grid.add_child(h)
@@ -84,11 +84,11 @@ func _ready() -> void:
 	cp.add_child(cv)
 	cv.add_child(UI.label("내 비밀 카드", 26, UI.SOFT))
 	cv.add_child(UI.label("「%s」" % card["name"], 38, UI.ACCENT, true))
-	cv.add_child(UI.label("%s + %s" % [card["desc"], Data.rank_text(card["rank"])], 24))
+	cv.add_child(UI.label("%s  → 성공하면 전체 등수 +0.5점" % card["desc"], 24))
 	cv.add_child(UI.label("달성하면 티켓 1장. 티켓 3장 = 할당량 한 단계 낮추기", 20, UI.SOFT))
 	cv.add_child(UI.label("방 전체 티켓: %d장" % Game.tickets, 22, UI.SOFT))
 
-	var go := UI.button("놀이터로 →", _go, 32)
+	var go := UI.primary("놀이터로 →  [Enter]", _go, 30)
 	var cc := CenterContainer.new()
 	cc.add_child(go)
 	col.add_child(cc)
@@ -104,3 +104,8 @@ func _process(delta: float) -> void:
 func _go() -> void:
 	set_process(false)
 	Game.goto("collect")
+
+
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.physical_keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+		_go()

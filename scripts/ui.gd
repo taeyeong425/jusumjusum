@@ -1,44 +1,41 @@
 class_name UI
 extends RefCounted
-## UI 헬퍼. 톤: 레고 — 흰 플라스틱 판 · 노란 브릭 버튼(아래 두께) · 손글씨
+## UI 헬퍼. 톤 (v0.5): 깔끔한 장난감 — 흰 카드 · 한 가지 강조색 버튼 · 나눔고딕
+const FONT_SCALE := 0.84   # 나눔고딕은 손글씨보다 커 보여서 전체를 줄인다
 
 const BG := Color("#F6EEDD")
 const PAPER := Color("#FFF8EC")
 const INK := Color("#1B2A34")
 const SOFT := Color("#56636D")
-const ACCENT := Color("#D6402B")
+const ACCENT := Color("#E2553D")
 const GOOD := Color("#237841")
 const BAD := Color("#C91A09")
-const CHALK := Color("#123A6B")
+const CHALK := Color("#24303B")
 
 
 static func theme() -> Theme:
 	Data.load_fonts()
 	var t := Theme.new()
 	t.default_font = Data.font_regular
-	t.default_font_size = 24
+	t.default_font_size = 20
 	t.set_color("font_color", "Label", INK)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var sb := StyleBoxFlat.new()
-		# 노란 브릭: 아래쪽 테두리를 두껍게 = 플라스틱 두께. 누르면 두께가 줄며 내려앉는다
-		sb.set_corner_radius_all(10)
-		sb.content_margin_left = 16
-		sb.content_margin_right = 16
-		sb.content_margin_top = 6
-		sb.content_margin_bottom = 4
-		sb.border_color = Color("#B88A12")
-		sb.set_border_width_all(2)
-		sb.border_width_bottom = 6
+		# 깔끔한 버튼: 연한 회색 바탕 · 얇은 테두리. 강조 버튼은 primary()로 따로
+		sb.set_corner_radius_all(8)
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+		sb.content_margin_top = 7
+		sb.content_margin_bottom = 7
+		sb.border_color = Color("#D5DADF")
+		sb.set_border_width_all(1)
 		match state:
-			"normal": sb.bg_color = Color("#F2CD37")
-			"hover": sb.bg_color = Color("#FFDB4D")
-			"pressed":
-				sb.bg_color = Color("#E3BA22")
-				sb.border_width_bottom = 2
-				sb.content_margin_top = 10
+			"normal": sb.bg_color = Color("#F3F5F7")
+			"hover": sb.bg_color = Color("#E6EBF0")
+			"pressed": sb.bg_color = Color("#D9E0E7")
 			"disabled":
-				sb.bg_color = Color("#E2E4E6")
-				sb.border_color = Color("#B9BEC2")
+				sb.bg_color = Color("#F3F5F7")
+				sb.border_color = Color("#E3E6E9")
 			"focus":
 				sb.bg_color = Color(0, 0, 0, 0)
 				sb.border_color = ACCENT
@@ -48,13 +45,13 @@ static func theme() -> Theme:
 	t.set_color("font_hover_color", "Button", INK)
 	t.set_color("font_pressed_color", "Button", INK)
 	t.set_color("font_disabled_color", "Button", Color("#9AA2A8"))
-	# 흰 플라스틱 판
+	# 흰 카드 (그림자 살짝)
 	var pnl := StyleBoxFlat.new()
-	pnl.bg_color = Color(1, 1, 1, 0.95)
-	pnl.set_corner_radius_all(14)
-	pnl.border_color = Color("#C3C9CE")
-	pnl.set_border_width_all(2)
-	pnl.border_width_bottom = 6
+	pnl.bg_color = Color(1, 1, 1, 0.96)
+	pnl.set_corner_radius_all(12)
+	pnl.shadow_color = Color(0, 0, 0, 0.12)
+	pnl.shadow_size = 6
+	pnl.shadow_offset = Vector2(0, 2)
 	pnl.content_margin_left = 16
 	pnl.content_margin_right = 16
 	pnl.content_margin_top = 12
@@ -66,7 +63,7 @@ static func theme() -> Theme:
 static func label(text: String, size := 24, col := INK, bold := false) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", int(size * FONT_SCALE))
 	l.add_theme_color_override("font_color", col)
 	if bold:
 		l.add_theme_font_override("font", Data.font_bold)
@@ -76,7 +73,7 @@ static func label(text: String, size := 24, col := INK, bold := false) -> Label:
 static func button(text: String, cb: Callable, size := 24) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_font_size_override("font_size", int(size * FONT_SCALE))
 	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(func(): UI.sfx("click", -6.0))
 	b.pressed.connect(cb)
@@ -341,6 +338,24 @@ static func tile_button(b: Button) -> void:
 		sb.set_corner_radius_all(8)
 		sb.border_color = Color("#C3C9CE")
 		sb.set_border_width_all(1)
-		sb.border_width_bottom = 4 if state != "pressed" else 1
-		sb.bg_color = {"normal": Color("#FFFFFF"), "hover": Color("#FFF6CC"), "pressed": Color("#F2E6A8")}[state]
+		sb.border_color = Color("#E1E5E9")
+		sb.bg_color = {"normal": Color("#FFFFFF"), "hover": Color("#F1F5F9"), "pressed": Color("#E4EAF0")}[state]
 		b.add_theme_stylebox_override(state, sb)
+
+
+## 강조 버튼 (진행 · 시작 등 화면에 하나) — 강조색 바탕 · 흰 글씨
+static func primary(text: String, cb: Callable, size := 26) -> Button:
+	var b := button(text, cb, size)
+	for state in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(10)
+		sb.content_margin_left = 22
+		sb.content_margin_right = 22
+		sb.content_margin_top = 9
+		sb.content_margin_bottom = 9
+		sb.bg_color = {"normal": ACCENT, "hover": ACCENT.lightened(0.1), "pressed": ACCENT.darkened(0.12)}[state]
+		b.add_theme_stylebox_override(state, sb)
+	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+		b.add_theme_color_override(c, Color.WHITE)
+	b.add_theme_font_override("font", Data.font_bold)
+	return b

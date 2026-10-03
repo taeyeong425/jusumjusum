@@ -3,16 +3,18 @@ extends Node3D
 ## 덩어리 하나. 필드 · 손 · 작업대 · 전시 어디서나 같은 노드, 같은 재질.
 ## 구조: Piece(위치·회전) → Vis(로컬 배율) → Mesh(기본 변환)
 ##       Piece → Body(배율 없음. 충돌 점을 배율에 맞춰 굽는다 — 물리 바디에 배율을 걸지 않는다)
-## 배율 = 비율(shape, 덩어리마다 고정) × 크기(size, 조립에서 조절)
+## 배율 = 비율(shape, 덩어리마다 고정) × 늘이기(stretch, 축별 · 조립에서) × 크기(size, 조립에서)
 
 const LAYER_PIECE := 2
 
 var type := "box"
 var shape := Vector3.ONE
 var size := 1.0
+var stretch := Vector3.ONE   # 축별 늘이기 (v0.5 — 비율을 바꿀 수 있다)
 var pscale := Vector3.ONE
 var color_idx := 0
 var origin := "ground"
+var src := ""          # 어디서 뜯었나 (train · car · play · town) — 카드 조건용
 var inv_index := -1
 var big := false      # 크게 키운 덩어리(받침대·모래밭 등)는 외곽선이 같이 두꺼워지므로 외곽선 없이
 var mkey := ""        # 변형 고유 메시 (육각기둥·별 판 등)
@@ -47,10 +49,16 @@ func setup(t: String, ci: int, collide := true, shp := Vector3.ONE) -> Piece:
 	return self
 
 
-## 조립용: 비율은 그대로, 전체 크기만
+## 조립용: 전체 크기
 func set_size(k: float) -> void:
 	size = clampf(k, Data.SIZE_MIN, Data.SIZE_MAX)
-	set_pscale(shape * size)
+	set_pscale(shape * stretch * size)
+
+
+## 조립용: 한 축만 늘이기 / 줄이기 (로컬 축 0·1·2)
+func set_stretch(axis: int, f: float) -> void:
+	stretch[axis] = clampf(f, 0.25, 4.0)
+	set_pscale(shape * stretch * size)
 
 
 ## 필드 오브젝트는 clamp 없이 크게 쓸 수 있다
@@ -105,7 +113,7 @@ func world_half_extents() -> Vector3:
 
 
 func to_dict() -> Dictionary:
-	return {"t": type, "p": position, "r": quaternion, "s": pscale, "sh": shape, "k": size,
+	return {"t": type, "p": position, "r": quaternion, "s": pscale, "sh": shape, "k": size, "st": stretch, "src": src,
 		"c": color_idx, "o": origin, "i": inv_index}
 
 
@@ -115,8 +123,10 @@ static func from_dict(d: Dictionary, collide := true) -> Piece:
 	p.position = d["p"]
 	p.quaternion = d["r"]
 	p.size = d.get("k", 1.0)
+	p.stretch = d.get("st", Vector3.ONE)
 	p.set_pscale(d["s"])
 	p.origin = d.get("o", "ground")
+	p.src = d.get("src", "")
 	p.inv_index = d.get("i", -1)
 	return p
 
@@ -125,4 +135,5 @@ static func from_item(it: Dictionary, collide := true) -> Piece:
 	var p := Piece.new()
 	p.setup(it["type"], it.get("color", 0), collide, it.get("shape", Vector3.ONE))
 	p.origin = it.get("origin", "ground")
+	p.src = it.get("src", "")
 	return p

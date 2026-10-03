@@ -32,7 +32,7 @@ const GROUPS := {
 }
 
 const SCALE_MIN := 0.2
-const SCALE_MAX := 3.0
+const SCALE_MAX := 6.0
 const SIZE_MIN := 0.35
 const SIZE_MAX := 3.0
 
@@ -97,11 +97,9 @@ static func color(i: int) -> Color:
 
 static func load_fonts() -> void:
 	if font_regular == null:
-		font_regular = load("res://assets/fonts/Gaegu-Regular.ttf")
-		font_bold = load("res://assets/fonts/Gaegu-Bold.ttf")
-		# Gaegu에는 기호(「」★☆·→—…)가 없다. 웹에는 시스템 폰트 대체가 없으므로 나눔고딕으로 채운다.
-		font_regular.fallbacks = [load("res://assets/fonts/NanumGothic-Regular.ttf")]
-		font_bold.fallbacks = [load("res://assets/fonts/NanumGothic-Bold.ttf")]
+		# v0.5: 손글씨(Gaegu) → 나눔고딕. "UI · 폰트가 유치하다" 피드백
+		font_regular = load("res://assets/fonts/NanumGothic-Regular.ttf")
+		font_bold = load("res://assets/fonts/NanumGothic-Bold.ttf")
 
 
 # ── 메시 ──────────────────────────────────────────────
@@ -348,15 +346,18 @@ static func brick(c: Color, studs := true, pitch := 0.25, gloss := 0.3) -> Shade
 	var m := ShaderMaterial.new()
 	m.shader = _brick_shader
 	m.set_shader_parameter("albedo", c)
-	m.set_shader_parameter("studs", 1.0 if studs else 0.0)
+	m.set_shader_parameter("studs", 1.0 if studs and STUDS else 0.0)
 	m.set_shader_parameter("pitch", pitch)
 	m.set_shader_parameter("gloss", gloss)
 	return m
 
 
 ## 윗면에 스터드가 있는 종류 (레고 브릭 · 플레이트 · 둥근 브릭)
+## v0.5: 스터드(레고 돌기) 끔 — "조립이 레고 방식이 아닌데 그래픽만 레고일 필요가 없다". 셰이더는 남겨 둠
+const STUDS := false
+
 static func has_studs(t: String) -> bool:
-	return t in ["box", "plate", "rod", "cylinder"]
+	return STUDS and t in ["box", "plate", "rod", "cylinder"]
 
 
 static func flat_material(c: Color) -> StandardMaterial3D:
@@ -526,18 +527,24 @@ static func pick_formation(round_i: int, rng: RandomNumberGenerator) -> String:
 # 성적 조건: "half" = 상위 절반, "notlast" = 꼴찌만 아니면 (동점 규칙은 Judge 참고)
 
 static func cards() -> Array:
+	# v0.5: 모으기 · 만들기와 이어지는 조건. 성공하면 전체 등수 +0.5점 · 방 티켓 +1. 등수 조건은 없앴다
 	return [
-		{"id": "minimal", "name": "미니멀", "desc": "덩어리 6개 이하로", "rank": "half"},
-		{"id": "glutton", "name": "과식", "desc": "모은 덩어리를 전부 써서", "rank": "notlast"},
-		{"id": "mono", "name": "단색", "desc": "한 가지 색만 써서", "rank": "half"},
-		{"id": "stubborn", "name": "외골수", "desc": "한 종류를 절반 이상 써서", "rank": "half"},
-		{"id": "honest", "name": "정직", "desc": "크기를 하나도 안 바꾸고", "rank": "notlast"},
-		{"id": "curvy", "name": "곡선만", "desc": "곡면 덩어리만 써서", "rank": "notlast"},
-		{"id": "wrecker", "name": "뜯기 장인", "desc": "뜯어서 얻은 덩어리 4개 이상 써서", "rank": "notlast"},
+		{"id": "train", "name": "기차 도둑", "desc": "기차에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
+		{"id": "car", "name": "자동차 정비공", "desc": "자동차에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
+		{"id": "play", "name": "놀이터 지킴이", "desc": "놀이기구에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
+		{"id": "sand", "name": "보물찾기", "desc": "모래밭에서 파낸 덩어리를 1개 이상 써서", "rank": ""},
+		{"id": "rainbow", "name": "알록달록", "desc": "4가지 색 이상 써서", "rank": ""},
+		{"id": "duo", "name": "깔맞춤", "desc": "2가지 색 이하로", "rank": ""},
+		{"id": "tall", "name": "고층 건물", "desc": "높이 1.5 이상으로", "rank": ""},
+		{"id": "minimal", "name": "미니멀", "desc": "덩어리 6개 이하로", "rank": ""},
+		{"id": "epic", "name": "대작", "desc": "덩어리 10개 이상으로", "rank": ""},
+		{"id": "nostretch", "name": "원래 모양", "desc": "늘이기 없이", "rank": ""},
 	]
 
 
 static func rank_text(r: String) -> String:
+	if r == "":
+		return ""
 	return "★ 상위 절반" if r == "half" else "★ 꼴찌만 아니면"
 
 
@@ -556,8 +563,8 @@ static func variant_name(t: String, shape: Vector3) -> String:
 	return NAMES[t]
 
 
-static func make_item(t: String, shape: Vector3, ci: int, origin: String) -> Dictionary:
-	return {"type": t, "shape": shape, "color": ci, "origin": origin, "name": variant_name(t, shape)}
+static func make_item(t: String, shape: Vector3, ci: int, origin: String, src := "") -> Dictionary:
+	return {"type": t, "shape": shape, "color": ci, "origin": origin, "src": src, "name": variant_name(t, shape)}
 
 
 ## 무작위 변형 (기본형이 절반)

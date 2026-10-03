@@ -5,16 +5,8 @@ extends Node
 func _ready() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	# 하늘색 바닥판 (스터드 무늬)
-	var bg := Control.new()
-	bg.draw.connect(func():
-		bg.draw_rect(Rect2(Vector2.ZERO, bg.size), Color("#9FD3EA"))
-		var p := 34.0
-		for y in int(bg.size.y / p) + 1:
-			for x in int(bg.size.x / p) + 1:
-				var c := Vector2(x * p + p * 0.5, y * p + p * 0.5)
-				bg.draw_circle(c + Vector2(2, 3), 10, Color("#86BCD6"))
-				bg.draw_circle(c, 10, Color("#AEDDF1")))
+	var bg := ColorRect.new()
+	bg.color = Color("#EAF2F7")
 	layer.add_child(UI.full(bg))
 
 	var center := CenterContainer.new()
@@ -23,35 +15,15 @@ func _ready() -> void:
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(col)
 
-	# 제목: 글자마다 색 브릭
-	var title := UI.hbox(10)
-	title.alignment = BoxContainer.ALIGNMENT_CENTER
-	var cols := ["#C91A09", "#F2CD37", "#0055BF", "#237841"]
-	var word := "주섬주섬"
-	for k in word.length():
-		var tile := PanelContainer.new()
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(cols[k])
-		sb.set_corner_radius_all(14)
-		sb.border_color = Color(cols[k]).darkened(0.3)
-		sb.border_width_bottom = 10
-		sb.content_margin_left = 18
-		sb.content_margin_right = 18
-		sb.content_margin_top = 2
-		sb.content_margin_bottom = 4
-		tile.add_theme_stylebox_override("panel", sb)
-		tile.rotation_degrees = [-4.0, 3.0, -2.0, 4.0][k]
-		tile.pivot_offset = Vector2(60, 70)
-		var l := UI.label(word[k], 104, Color.WHITE if k != 1 else UI.INK, true)
-		tile.add_child(l)
-		title.add_child(tile)
+	var title := UI.label("주섬주섬", 112, UI.INK, true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 	var sub := UI.label("놀이터를 뜯어서, 정해진 물건을 만들고, 다 같이 할당량을 넘겨라", 28, UI.SOFT)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(sub)
 	col.add_child(Control.new())
 
-	var start := UI.button("놀이 시작", _start, 36)
+	var start := UI.primary("놀이 시작", _start, 36)
 	start.custom_minimum_size = Vector2(320, 64)
 	col.add_child(_centered(start))
 
@@ -82,7 +54,7 @@ func _ready() -> void:
 		hv.add_child(UI.label(line, 21, UI.SOFT))
 	col.add_child(help)
 
-	var credit := UI.label("프로토타입 v0.4 · Godot 4.7 · 폰트 Gaegu · 나눔고딕 (OFL) · 효과음 Kenney (CC0)", 18, Color(UI.SOFT, 0.7))
+	var credit := UI.label("프로토타입 v0.5 · Godot 4.7 · 폰트 나눔고딕 (OFL) · 효과음 Kenney (CC0)", 18, Color(UI.SOFT, 0.7))
 	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(credit)
 

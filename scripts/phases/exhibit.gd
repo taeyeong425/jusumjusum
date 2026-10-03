@@ -102,7 +102,7 @@ func _ready() -> void:
 	var pm := PlaneMesh.new(); pm.size = Vector2(40, 40)
 	fl.mesh = pm
 	fl.position.y = -0.42
-	fl.material_override = Data.brick(Color("#A0A5A9"), true, 0.25, 0.5)   # 회색 바닥판
+	fl.material_override = Data.brick(Color("#DCE3E8"), false, 0.25, 0.7)
 	add_child(fl)
 	pivot = Node3D.new()
 	add_child(pivot)
@@ -154,7 +154,7 @@ func _build_hud() -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(sp)
-	h.add_child(UI.button("다음 작품 →", _next, 22))
+	h.add_child(UI.primary("다음 작품 →  [Enter]", _next, 22))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 16))
 

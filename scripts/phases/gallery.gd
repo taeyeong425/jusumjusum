@@ -11,7 +11,7 @@ func _ready() -> void:
 	var fl := MeshInstance3D.new()
 	var pm := PlaneMesh.new(); pm.size = Vector2(80, 40)
 	fl.mesh = pm
-	fl.material_override = Data.brick(Color("#A0A5A9"), true, 0.25, 0.5)   # 회색 바닥판
+	fl.material_override = Data.brick(Color("#DCE3E8"), false, 0.25, 0.7)
 	add_child(fl)
 	var letters: Dictionary = Game.get_meta("letters") if Game.has_meta("letters") else {}
 	var x := 0.0
@@ -79,7 +79,7 @@ func _build_hud() -> void:
 		v.add_child(UI.label(line, 24 if rank == 1 else 20, col, rank == 1 or i == 0))
 	var h := UI.hbox(12)
 	v.add_child(h)
-	h.add_child(UI.button("한 판 더", _again, 26))
+	h.add_child(UI.primary("한 판 더", _again, 26))
 	h.add_child(UI.button("처음으로", func(): Game.goto("menu"), 22))
 	layer.add_child(p)
 	UI.corner(p, Control.PRESET_TOP_LEFT)

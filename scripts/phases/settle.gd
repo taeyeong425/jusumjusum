@@ -8,6 +8,8 @@ var reveal_t := 0.0
 var verdict_l: Label
 var detail_l: Label
 var stand_l: Label
+var button_bar: PanelContainer
+var primary: Button
 var buttons: HBoxContainer
 var shown := false
 
@@ -43,58 +45,81 @@ func _build_ui(c_ok: bool, r_ok: bool) -> void:
 	bg.color = UI.CHALK
 	layer.add_child(UI.full(bg))
 	var margin := MarginContainer.new()
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 32)
+	for s in ["left", "right", "top"]:
+		margin.add_theme_constant_override("margin_" + s, 28)
+	margin.add_theme_constant_override("margin_bottom", 96)   # 아래 버튼 줄 자리
 	layer.add_child(UI.full(margin))
-	var col := UI.vbox(12)
+	var col := UI.vbox(10)
 	margin.add_child(col)
-	var chalk := Color("#F4F1E6")
-	col.add_child(UI.label("%d라운드 정산 · 「%s」 · 할당량 ★%.1f 이상 %d명" % [Game.round_i, Game.target["name"], Game.quota[0], Game.quota[1]], 30, chalk, true))
+	var chalk := Color("#F4F6F8")
+	col.add_child(UI.label("%d / %d라운드 정산 · 「%s」 · 할당량 ★%.1f 이상 %d명" % [Game.round_i, Game.ROUNDS, Game.target["name"], Game.quota[0], Game.quota[1]], 26, chalk, true))
 
+	var main := UI.hbox(20)
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(main)
+	var left := UI.vbox(6)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.add_child(left)
 	chart = Control.new()
-	chart.custom_minimum_size = Vector2(0, 300)
+	chart.custom_minimum_size = Vector2(0, 200)
 	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	chart.draw.connect(_draw_chart)
-	col.add_child(chart)
-
-	verdict_l = UI.label("", 52, chalk, true)
+	left.add_child(chart)
+	verdict_l = UI.label("", 40, chalk, true)
 	verdict_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(verdict_l)
+	left.add_child(verdict_l)
+	stand_l = UI.label("", 18, Color("#FFE08A"), true)
+	stand_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	left.add_child(stand_l)
 
-	var row := UI.hbox(18)
-	col.add_child(row)
+	var right := UI.vbox(10)
+	right.custom_minimum_size = Vector2(390, 0)
+	main.add_child(right)
+	# 내 작품 — 평점 · 닮음 · 봇 한마디
+	var mp := UI.panel()
+	right.add_child(mp)
+	var mv := UI.vbox(2)
+	mp.add_child(mv)
+	detail_l = UI.label("", 22, UI.INK, true)
+	mv.add_child(detail_l)
+	var names := []
+	for i in range(1, Game.players.size()):
+		names.append(Game.players[i]["name"])
+	names.shuffle()
+	var says: Array = Judge.comments(Game.human()["work"], result["scores"][0], Game.target["name"], Game.rng)
+	for k in says.size():
+		mv.add_child(UI.label("%s: “%s”" % [names[k % names.size()], says[k]], 18, UI.SOFT))
+	# 카드
 	var cp := UI.panel()
-	cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(cp)
+	right.add_child(cp)
 	var cv := UI.vbox(2)
 	cp.add_child(cv)
 	var card: Dictionary = Game.human()["card"]
-	cv.add_child(UI.label("내 카드 「%s」" % card["name"], 24, UI.INK, true))
-	cv.add_child(UI.label("제약 (%s): %s" % [card["desc"], "달성" if c_ok else "미달"], 20, UI.GOOD if c_ok else UI.BAD))
-	cv.add_child(UI.label("성적 (%s): %s" % [Data.rank_text(card["rank"]), "달성" if r_ok else "미달"], 20, UI.GOOD if r_ok else UI.BAD))
-	cv.add_child(UI.label("이번 라운드 티켓 +%d → 방 전체 %d장" % [result["gained"], Game.tickets], 20, UI.SOFT))
-
+	cv.add_child(UI.label("내 카드 「%s」 %s — %s" % [card["name"], card["desc"], "성공! 등수 +0.5점 · 티켓 +1" if c_ok and r_ok else "실패"], 18, UI.GOOD if c_ok and r_ok else UI.BAD, true))
+	cv.add_child(UI.label("방 전체 티켓 %d장 (3장 = 할당량 한 단계 낮추기)" % Game.tickets, 16, UI.SOFT))
+	# 부문상 — 내 것 먼저, 나머지는 한 줄씩
 	var ap := UI.panel()
-	ap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(ap)
+	right.add_child(ap)
 	var av := UI.vbox(0)
 	ap.add_child(av)
-	av.add_child(UI.label("부문상 (점수 없음)", 24, UI.INK, true))
+	av.add_child(UI.label("부문상", 20, UI.INK, true))
 	var letters: Dictionary = Game.get_meta("letters")
-	for a in result["awards"]:
+	var aw: Array = result["awards"].duplicate()
+	aw.sort_custom(func(a, b): return a["who"] == 0 and b["who"] != 0)
+	for a in aw:
 		var who: int = a["who"]
 		var nm := "내 작품" if who == 0 else "작품 %s" % letters[who]
-		av.add_child(UI.label("%s — %s" % [nm, a["name"]], 19, UI.ACCENT if who == 0 else UI.SOFT))
+		av.add_child(UI.label("%s — %s" % [nm, a["name"]], 16 if who != 0 else 19, UI.ACCENT if who == 0 else UI.SOFT, who == 0))
 
-	detail_l = UI.label("", 20, Color(chalk, 0.75))
-	col.add_child(detail_l)
-	stand_l = UI.label("", 22, Color("#FFE08A"), true)
-	stand_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(stand_l)
+	# 아래 버튼 줄 (화면 밖으로 밀려나지 않게 따로 고정)
+	var bp := UI.panel()
 	buttons = UI.hbox(16)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	buttons.visible = false
-	col.add_child(buttons)
+	bp.add_child(buttons)
+	bp.visible = false
+	layer.add_child(bp)
+	UI.corner(bp, Control.PRESET_CENTER_BOTTOM, Vector2(0, 14))
+	button_bar = bp
 
 
 func _process(delta: float) -> void:
@@ -120,16 +145,17 @@ func _show_verdict() -> void:
 		verdict_l.text = "아깝다…  %d명 / %d명 필요" % [v["got"], v["need"]]
 		verdict_l.add_theme_color_override("font_color", Color("#F2A7B5"))
 	var me_avg: float = result["avg"][0]
-	detail_l.text = "내 작품 평점 ★%.1f (봇이 본 닮음 %.0f%%) · 이번 판 기록 %d라운드" % [me_avg, result["scores"][0] * 100, Game.round_i]
+	detail_l.text = "내 작품 ★%.1f · 닮음 %.0f%%" % [me_avg, result["scores"][0] * 100]
 	for c in buttons.get_children():
 		c.queue_free()
 	if not v["pass"] and Game.tickets >= 3 and not Game.lowered_this_round:
 		buttons.add_child(UI.button("티켓 3장으로 할당량 한 단계 낮추기", _lower, 24))
 	if Game.round_i < Game.ROUNDS:
-		buttons.add_child(UI.button("다음 라운드 (%d / %d) →" % [Game.round_i + 1, Game.ROUNDS], _next_round, 30))
+		primary = UI.primary("다음 라운드 (%d / %d) →   [Enter]" % [Game.round_i + 1, Game.ROUNDS], _next_round, 28)
 	else:
-		buttons.add_child(UI.button("최종 결과 · 전시회 보러 가기 →", _to_gallery, 28))
-	buttons.visible = true
+		primary = UI.primary("최종 결과 보기 →   [Enter]", _to_gallery, 28)
+	buttons.add_child(primary)
+	button_bar.visible = true
 	_store_history()
 	_show_standings()
 
@@ -147,12 +173,24 @@ func _show_standings() -> void:
 	stand_l.text = "전체 등수 (%d라운드 합계)  " % Game.history.size() + "  ·  ".join(parts)
 
 
+## Enter / Space = 다음으로
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.physical_keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+		if shown and primary and is_instance_valid(primary):
+			primary.pressed.emit()
+		elif not shown:
+			reveal_t = 2.6   # 연출 건너뛰기
+
+
 func _store_history() -> void:
 	var works := []
 	for p in Game.players:
 		works.append(p["work"])
+	var cards := []
+	for p in Game.players:
+		cards.append(p.get("card_done", false))
 	var rec := {"round": Game.round_i, "target": Game.target["name"], "works": works,
-		"avg": result["avg"], "pass": verdict["pass"]}
+		"avg": result["avg"], "pass": verdict["pass"], "cards": cards}
 	if Game.history.size() >= Game.round_i:
 		Game.history[Game.round_i - 1] = rec
 	else:
@@ -164,7 +202,7 @@ func _lower() -> void:
 		verdict = Judge.quota_pass(result["avg"], Game.quota)
 		reveal_t = 0.0
 		shown = false
-		buttons.visible = false
+		button_bar.visible = false
 
 
 func _next_round() -> void:
@@ -183,24 +221,13 @@ func _to_gallery() -> void:
 	Game.goto("gallery")
 
 
-## 막대 = 브릭을 쌓은 탑 (0.5점 = 브릭 한 칸, 맨 위에 스터드)
-func _brick_tower(r: Rect2, col: Color, step: float) -> void:
-	if r.size.y <= 0.5:
-		return
-	var y := r.end.y
-	var k := 0
-	while y > r.position.y + 0.5:
-		var h := minf(step, y - r.position.y)
-		var br := Rect2(r.position.x, y - h, r.size.x, h)
-		chart.draw_rect(br, col.darkened(0.04 * (k % 2)))
-		chart.draw_rect(Rect2(br.position.x, br.end.y - 3, br.size.x, 3), col.darkened(0.25))
-		y -= h
-		k += 1
-	var n := maxi(2, int(r.size.x / 26))
-	for s in n:
-		var cx := r.position.x + r.size.x * (s + 0.5) / n
-		chart.draw_rect(Rect2(cx - 8, r.position.y - 6, 16, 6), col.lightened(0.12))
-		chart.draw_rect(Rect2(cx - 8, r.position.y - 6, 16, 6), col.darkened(0.25), false, 1.0)
+## 막대: 위만 둥근 깔끔한 막대
+func _bar_box(col: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	return sb
 
 
 func _draw_chart() -> void:
@@ -225,7 +252,7 @@ func _draw_chart() -> void:
 		var col := Color("#4B9F4A") if passed else Color("#A0A5A9")
 		if i == 0:
 			col = Color("#F2CD37") if passed else Color("#E4CD9E")
-		_brick_tower(Rect2(x, base_y - hgt, bw, hgt), col, scale_y * 0.5)
+		chart.draw_style_box(_bar_box(col), Rect2(x, base_y - hgt, bw, maxf(hgt, 1.0)))
 		var nm: String = "내 것" if i == 0 else letters.get(i, "?")
 		chart.draw_string(font, Vector2(x, base_y + 30), nm, HORIZONTAL_ALIGNMENT_CENTER, bw, 26, Color("#F4F1E6"))
 		chart.draw_string(font, Vector2(x, base_y - hgt - 8), "★%.1f" % avg[i], HORIZONTAL_ALIGNMENT_CENTER, bw, 24, Color("#F4F1E6"))

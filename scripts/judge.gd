@@ -243,9 +243,35 @@ static func quota_pass(avg: Array, quota: Array) -> Dictionary:
 ## 제약 부분만 (조립 중 실시간 표시에 쓴다)
 static func card_constraint(card: Dictionary, work: Array, inventory_size: int) -> bool:
 	var n := work.size()
-	if n < 5:
+	if n < 3:
 		return false
+	var src_n := func(s: String) -> int:
+		var c := 0
+		for d in work:
+			if d.get("src", "") == s:
+				c += 1
+		return c
+	var colors := {}
+	for d in work:
+		colors[d["c"]] = true
 	match card["id"]:
+		"train": return src_n.call("train") >= 2
+		"car": return src_n.call("car") >= 2
+		"play": return src_n.call("play") >= 2
+		"sand":
+			for d in work:
+				if d.get("o", "") == "dig":
+					return true
+			return false
+		"rainbow": return colors.size() >= 4
+		"duo": return colors.size() <= 2
+		"tall": return bounds(work_boxes(work)).size.y >= 1.5
+		"epic": return n >= 10
+		"nostretch":
+			for d in work:
+				if not (d.get("st", Vector3.ONE) as Vector3).is_equal_approx(Vector3.ONE):
+					return false
+			return true
 		"minimal":
 			return n <= 6
 		"glutton":
@@ -286,6 +312,8 @@ static func card_constraint(card: Dictionary, work: Array, inventory_size: int) 
 ##  상위 절반 = 나보다 평점이 '엄격히 높은' 작품 수 < 절반
 ##  꼴찌만 아니면 = 나보다 '엄격히 낮은' 작품이 하나라도 있다 (최저 동점은 전원 꼴찌)
 static func card_rank_ok(rank: String, idx: int, avg: Array) -> bool:
+	if rank == "":
+		return true
 	var higher := 0
 	var lower := 0
 	for i in avg.size():
@@ -313,6 +341,10 @@ static func awards(players: Array, ratings: Array) -> Array:
 		["이게 뭐죠?", func(i): return _spread(ratings, i)],
 		["키다리", func(i): return bounds(work_boxes(players[i]["work"])).size.y],
 		["꼼꼼이", func(i): return players[i]["work"].size()],
+		["옆으로 넓게", func(i): return bounds(work_boxes(players[i]["work"])).size.x if players[i]["work"].size() > 0 else 0.0],
+		["뒤태 장인", func(i): return bounds(work_boxes(players[i]["work"])).size.z if players[i]["work"].size() > 0 else 0.0],
+		["닮음 1등", func(i): return ratings_avg(ratings, i)],
+		["반전 매력", func(i): return -ratings_avg(ratings, i)],
 	]
 	# 각 범주에서 1위를 정하되, 한 사람은 상 하나만. 남은 사람은 참가상.
 	var cand := []
@@ -324,6 +356,7 @@ static func awards(players: Array, ratings: Array) -> Array:
 		var mn: float = vals.min()
 		for i in n:
 			var norm: float = 0.5 if mx - mn < 0.0001 else (vals[i] - mn) / (mx - mn)
+			norm += randf() * 0.35   # 매 판 같은 상만 받지 않게
 			cand.append([norm, ci, i])
 	cand.sort_custom(func(a, b): return a[0] > b[0])
 	var got := {}
@@ -337,7 +370,7 @@ static func awards(players: Array, ratings: Array) -> Array:
 		out.append({"who": c[2], "name": cats[c[1]][0]})
 	for i in n:
 		if not got.has(i):
-			out.append({"who": i, "name": "오늘도 만들었다"})
+			out.append({"who": i, "name": ["오늘도 만들었다", "꾸준상", "도전상", "아이디어상", "열정상"][randi() % 5]})
 	return out
 
 
@@ -402,3 +435,47 @@ static func settle_work(work: Array) -> Array:
 		nd["p"] = d["p"] - off
 		out.append(nd)
 	return out
+
+
+## 봇 한마디 — 닮음 점수대 + 작품 특징에서 골라 매번 다르게
+static func comments(work: Array, score: float, tgt: String, rng: RandomNumberGenerator) -> Array:
+	var hi := ["누가 봐도 %s!", "이건 진짜 %s다", "디테일 좋다", "뒤에서 봐도 %s네", "내 거보다 낫다…", "%s 장인 등장", "보자마자 알았음"]
+	var mid := ["%s 같긴 한데 뭔가 아쉬워", "멀리서 보면 %s", "실루엣은 맞는 듯", "한 끗 차이!", "조금만 더 다듬으면 %s", "반쯤 %s", "의도는 알겠다"]
+	var lo := ["이게 %s…?", "새로운 해석이다", "추상화 장르인가요", "제목 보고 알았음", "용기를 칭찬한다", "%s… 의 친척?", "다음 판엔 꼭!"]
+	var pool: Array = hi if score > 0.72 else (mid if score > 0.48 else lo)
+	pool = pool.duplicate()
+	var feat := []
+	var colors := {}
+	var stretched := false
+	for d in work:
+		colors[d["c"]] = true
+		if d.has("st") and not (d["st"] as Vector3).is_equal_approx(Vector3.ONE):
+			stretched = true
+	if work.size() >= 10: feat.append("덩어리 %d개라니 공들였다" % work.size())
+	if work.size() <= 5: feat.append("적은 덩어리로 해낸 게 멋짐")
+	if colors.size() >= 5: feat.append("알록달록 색감 좋다")
+	if colors.size() <= 2: feat.append("색을 아낀 게 깔끔하다")
+	if stretched: feat.append("비율 늘린 게 신의 한 수")
+	if work.size() > 0 and bounds(work_boxes(work)).size.y > 1.6: feat.append("키가 엄청 크다")
+	var out := []
+	for k in 2:
+		var i := rng.randi() % pool.size()
+		var s: String = pool[i]
+		pool.remove_at(i)
+		out.append(s % tgt if s.contains("%s") else s)
+	if not feat.is_empty():
+		out.append(feat[rng.randi() % feat.size()])
+	else:
+		var s2: String = pool[rng.randi() % pool.size()]
+		out.append(s2 % tgt if s2.contains("%s") else s2)
+	return out
+
+
+static func ratings_avg(ratings: Array, w: int) -> float:
+	var s := 0.0
+	var n := 0
+	for row in ratings:
+		if w < row.size() and float(row[w]) >= 0.0:
+			s += float(row[w])
+			n += 1
+	return s / maxf(1.0, n)
