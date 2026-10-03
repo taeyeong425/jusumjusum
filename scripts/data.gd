@@ -33,6 +33,29 @@ const GROUPS := {
 
 const SCALE_MIN := 0.2
 const SCALE_MAX := 3.0
+const SIZE_MIN := 0.35
+const SIZE_MAX := 3.0
+
+## 덩어리 변형 — 같은 종류도 비율이 다른 버전이 처음부터 있다.
+## 조립에서는 전체 크기와 회전만 바꾼다. 납작한 원기둥이 필요하면 "바퀴"를 뜯어 와야 한다.
+## [이름, 비율(로컬 X·Y·Z)]
+const VARIANTS := {
+	"sphere": [["공", Vector3(1, 1, 1)], ["럭비공", Vector3(1.5, 0.8, 0.8)], ["접시", Vector3(1.4, 0.35, 1.4)]],
+	"hemi": [["반구", Vector3(1, 1, 1)], ["납작 반구", Vector3(1.3, 0.5, 1.3)], ["높은 반구", Vector3(0.8, 1.6, 0.8)]],
+	"cylinder": [["원기둥", Vector3(1, 1, 1)], ["바퀴", Vector3(1.5, 0.35, 1.5)], ["기둥", Vector3(0.55, 2.0, 0.55)], ["동전", Vector3(1.2, 0.12, 1.2)]],
+	"cone": [["원뿔", Vector3(1, 1, 1)], ["뾰족 원뿔", Vector3(0.6, 1.6, 0.6)], ["납작 원뿔", Vector3(1.4, 0.5, 1.4)]],
+	"capsule": [["캡슐", Vector3(1, 1, 1)], ["긴 캡슐", Vector3(0.8, 1.6, 0.8)], ["통통 캡슐", Vector3(1.6, 0.9, 1.6)]],
+	"ring": [["링", Vector3(1, 1, 1)], ["타이어", Vector3(1, 2.6, 1)], ["가는 링", Vector3(1.2, 0.6, 1.2)]],
+	"box": [["정육면체", Vector3(1, 1, 1)], ["벽돌", Vector3(1.6, 0.6, 0.9)], ["기둥 블록", Vector3(0.5, 2.0, 0.5)]],
+	"rod": [["막대", Vector3(1, 1, 1)], ["짧은 막대", Vector3(1, 0.45, 1)], ["긴 막대", Vector3(0.8, 1.7, 0.8)]],
+	"plate": [["판", Vector3(1, 1, 1)], ["넓은 판", Vector3(1.7, 1, 1.6)], ["좁은 판", Vector3(0.45, 1, 1.3)], ["긴 판", Vector3(3.0, 1.2, 0.9)]],
+	"wedge": [["쐐기", Vector3(1, 1, 1)], ["납작 쐐기", Vector3(1.4, 0.5, 1)], ["긴 쐐기", Vector3(0.7, 1, 2.0)]],
+	"potato": [["감자", Vector3(1, 1, 1)], ["길쭉 감자", Vector3(1.4, 0.8, 0.8)]],
+	"pebble": [["자갈", Vector3(1, 1, 1)], ["납작 자갈", Vector3(1.3, 0.6, 1.3)]],
+}
+
+## 땅에 굴러다니는 덩어리 색 (팔레트 번호)
+const TOY_COLORS := [1, 2, 3, 4, 5, 7, 8, 10, 11, 13]
 
 ## 할당량 (6인). 검수 반영: ★ 상한 4.0 — ★4.5는 ★5 제한 하에서 수학적으로 불가능했다.
 ## 값은 6인 평점 격자(0.2 단위) 위에만 둔다.
@@ -89,17 +112,17 @@ static func mesh(t: String) -> Mesh:
 	var m: Mesh
 	match t:
 		"sphere":
-			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.6; m = s
+			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.6; s.radial_segments = 18; s.rings = 9; m = s
 		"hemi":
-			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.3; s.is_hemisphere = true; m = s
+			var s := SphereMesh.new(); s.radius = 0.3; s.height = 0.3; s.is_hemisphere = true; s.radial_segments = 18; s.rings = 5; m = s
 		"cylinder":
-			var c := CylinderMesh.new(); c.top_radius = 0.25; c.bottom_radius = 0.25; c.height = 0.6; m = c
+			var c := CylinderMesh.new(); c.top_radius = 0.25; c.bottom_radius = 0.25; c.height = 0.6; c.radial_segments = 18; c.rings = 0; m = c
 		"cone":
-			var c := CylinderMesh.new(); c.top_radius = 0.0; c.bottom_radius = 0.3; c.height = 0.6; m = c
+			var c := CylinderMesh.new(); c.top_radius = 0.0; c.bottom_radius = 0.3; c.height = 0.6; c.radial_segments = 18; c.rings = 0; m = c
 		"capsule":
-			var c := CapsuleMesh.new(); c.radius = 0.15; c.height = 0.6; m = c
+			var c := CapsuleMesh.new(); c.radius = 0.15; c.height = 0.6; c.radial_segments = 14; c.rings = 3; m = c
 		"ring":
-			var r := TorusMesh.new(); r.inner_radius = 0.17; r.outer_radius = 0.3; m = r
+			var r := TorusMesh.new(); r.inner_radius = 0.17; r.outer_radius = 0.3; r.rings = 22; r.ring_segments = 9; m = r
 		"box":
 			var b := BoxMesh.new(); b.size = Vector3(0.5, 0.5, 0.5); m = b
 		"rod":
@@ -169,6 +192,7 @@ static func material(ci: int, alpha := 1.0) -> StandardMaterial3D:
 	m.albedo_color = color(ci)
 	m.roughness = 0.85
 	m.metallic_specular = 0.2
+	m.next_pass = outline_material()
 	if alpha < 1.0:
 		m.albedo_color.a = alpha
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -348,7 +372,7 @@ static func cards() -> Array:
 		{"id": "glutton", "name": "과식", "desc": "모은 덩어리를 전부 써서", "rank": "notlast"},
 		{"id": "mono", "name": "단색", "desc": "한 가지 색만 써서", "rank": "half"},
 		{"id": "stubborn", "name": "외골수", "desc": "한 종류를 절반 이상 써서", "rank": "half"},
-		{"id": "honest", "name": "정직", "desc": "크기 변형 없이 (배율 1.0)", "rank": "notlast"},
+		{"id": "honest", "name": "정직", "desc": "크기를 하나도 안 바꾸고", "rank": "notlast"},
 		{"id": "curvy", "name": "곡선만", "desc": "곡면 덩어리만 써서", "rank": "notlast"},
 		{"id": "wrecker", "name": "뜯기 장인", "desc": "뜯어서 얻은 덩어리 4개 이상 써서", "rank": "notlast"},
 	]
@@ -356,3 +380,53 @@ static func cards() -> Array:
 
 static func rank_text(r: String) -> String:
 	return "★ 상위 절반" if r == "half" else "★ 꼴찌만 아니면"
+
+
+# ── 아이템 (모은 덩어리 하나) ────────────────────────
+# {"type", "shape": Vector3 비율, "color": 팔레트 번호, "origin": ground|tear|dig|auto, "name"}
+
+static func variant(t: String, i: int) -> Array:
+	var vs: Array = VARIANTS[t]
+	return vs[clampi(i, 0, vs.size() - 1)]
+
+
+static func variant_name(t: String, shape: Vector3) -> String:
+	for v in VARIANTS[t]:
+		if (v[1] as Vector3).is_equal_approx(shape):
+			return v[0]
+	return NAMES[t]
+
+
+static func make_item(t: String, shape: Vector3, ci: int, origin: String) -> Dictionary:
+	return {"type": t, "shape": shape, "color": ci, "origin": origin, "name": variant_name(t, shape)}
+
+
+## 무작위 변형 (기본형이 절반)
+static func random_item(t: String, origin: String, rng: RandomNumberGenerator) -> Dictionary:
+	var vs: Array = VARIANTS[t]
+	var v: Array = vs[0] if rng.randf() < 0.5 else vs[rng.randi() % vs.size()]
+	return make_item(t, v[1], TOY_COLORS[rng.randi() % TOY_COLORS.size()], origin)
+
+
+## 장난감 느낌의 외곽선 — 필드 · 손 · 작업대 · 전시 어디서나 같은 재질
+static var _outline: StandardMaterial3D
+static func outline_material() -> StandardMaterial3D:
+	if _outline == null:
+		_outline = StandardMaterial3D.new()
+		_outline.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline.cull_mode = BaseMaterial3D.CULL_FRONT
+		_outline.grow = true
+		_outline.grow_amount = 0.012
+		_outline.albedo_color = Color("#3B3024")
+	return _outline
+
+
+static var _rust: StandardMaterial3D
+static func rust_material() -> StandardMaterial3D:
+	if _rust == null:
+		_rust = StandardMaterial3D.new()
+		_rust.albedo_color = Color("#6B5B4C")
+		_rust.roughness = 1.0
+		_rust.metallic_specular = 0.1
+		_rust.next_pass = outline_material()
+	return _rust

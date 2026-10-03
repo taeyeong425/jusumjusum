@@ -40,7 +40,7 @@ func _play(hq: float, rng: RandomNumberGenerator) -> int:
 				if counts.get(t, 0) <= 0:
 					t = "box"
 				counts[t] = counts.get(t, 1) - 1
-				inv.append({"type": t, "origin": "ground"})
+				inv.append(Data.random_item(t, "ground", rng))
 			p["work"] = BotBuilder.build(tpl, inv, p["quality"], rng)
 		# 사람의 평가는 봇처럼 근사
 		var tmp := Judge.rate_round(players, tpl, {}, rng)

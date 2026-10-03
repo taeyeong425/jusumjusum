@@ -70,6 +70,7 @@ static func button(text: String, cb: Callable, size := 24) -> Button:
 	b.text = text
 	b.add_theme_font_size_override("font_size", size)
 	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(func(): UI.sfx("click", -6.0))
 	b.pressed.connect(cb)
 	return b
 
@@ -163,7 +164,8 @@ static func make_env(parent: Node, sky := Color("#CFE6F2")) -> void:
 	sun.light_energy = 0.7
 	sun.light_color = Color("#FFF1DC")
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 60.0
+	sun.directional_shadow_max_distance = 40.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	parent.add_child(sun)
 
 
@@ -178,3 +180,85 @@ static func label3d(text: String, size := 64, col := INK) -> Label3D:
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.pixel_size = 0.01
 	return l
+
+
+## 덩어리 아이콘 — 실제 비율(기본 크기 × 변형)과 색 그대로 정면 실루엣을 그린다.
+## 판은 얇아서 위에서 본 모양으로.
+static func draw_chunk_icon(c: CanvasItem, item: Dictionary, r: Rect2) -> void:
+	var t: String = item["type"]
+	var sh: Vector3 = item.get("shape", Vector3.ONE)
+	var b := Data.base_size(t) * sh
+	var w := b.x
+	var h := b.z if t == "plate" else b.y
+	if t == "ring":
+		h = b.x if b.y < b.x else b.y
+	var k := minf(r.size.x / maxf(w, 0.01), r.size.y / maxf(h, 0.01)) * 0.92
+	var W := maxf(w * k, 3.0)
+	var H := maxf(h * k, 3.0)
+	var cen := r.get_center()
+	var col := Data.color(item.get("color", 0))
+	var ink := Color(INK, 0.85)
+	var rect := Rect2(cen - Vector2(W, H) * 0.5, Vector2(W, H))
+	match t:
+		"sphere", "potato", "pebble":
+			var pts := _ellipse_pts(cen, W * 0.5, H * 0.5, 20 if t == "sphere" else (8 if t == "potato" else 6))
+			c.draw_colored_polygon(pts, col)
+			c.draw_polyline(_closed(pts), ink, 1.5)
+		"hemi":
+			var pts := PackedVector2Array()
+			for i in 13:
+				var a := PI + PI * i / 12.0
+				pts.append(Vector2(cen.x + cos(a) * W * 0.5, cen.y + H * 0.5 + sin(a) * H))
+			c.draw_colored_polygon(pts, col)
+			c.draw_polyline(_closed(pts), ink, 1.5)
+		"cone":
+			var pts := PackedVector2Array([Vector2(cen.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)])
+			c.draw_colored_polygon(pts, col)
+			c.draw_polyline(_closed(pts), ink, 1.5)
+		"wedge":
+			var pts := PackedVector2Array([rect.position, rect.end, Vector2(rect.position.x, rect.end.y)])
+			c.draw_colored_polygon(pts, col)
+			c.draw_polyline(_closed(pts), ink, 1.5)
+		"ring":
+			var rad := minf(W, H) * 0.5
+			c.draw_arc(cen, rad * 0.72, 0, TAU, 28, col, rad * 0.5)
+			c.draw_arc(cen, rad, 0, TAU, 28, ink, 1.5)
+			c.draw_arc(cen, rad * 0.45, 0, TAU, 28, ink, 1.5)
+		"capsule":
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = col
+			sb.set_corner_radius_all(int(minf(W, H) * 0.5))
+			sb.border_color = ink
+			sb.set_border_width_all(1)
+			c.draw_style_box(sb, rect)
+		"cylinder":
+			c.draw_rect(rect, col)
+			var eh := clampf(W * 0.18, 2.0, H * 0.4)
+			c.draw_colored_polygon(_ellipse_pts(Vector2(cen.x, rect.position.y), W * 0.5, eh, 16), col.lightened(0.18))
+			c.draw_rect(rect, ink, false, 1.5)
+		_:
+			c.draw_rect(rect, col)
+			c.draw_rect(rect, ink, false, 1.5)
+
+
+static func _ellipse_pts(c: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in n:
+		var a := TAU * i / n
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+	return pts
+
+
+static func _closed(p: PackedVector2Array) -> PackedVector2Array:
+	var q := p.duplicate()
+	q.append(p[0])
+	return q
+
+
+## autoload를 직접 참조하지 않는다 (헤드리스 테스트 스크립트에서도 컴파일되게)
+static func sfx(name: String, db := 0.0) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree:
+		var s := tree.root.get_node_or_null("Sfx")
+		if s:
+			s.play(name, db)

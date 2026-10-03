@@ -55,7 +55,9 @@ func _init() -> void:
 func _full_inventory(tpl: Dictionary) -> Array:
 	var inv := []
 	for part in tpl["parts"]:
-		inv.append({"type": Data.GROUPS[part[0]][0], "origin": "ground"})
+		var t: String = Data.GROUPS[part[0]][0]
+		for v in Data.VARIANTS[t]:
+			inv.append(Data.make_item(t, v[1], 0, "ground"))
 	while inv.size() < 12:
-		inv.append({"type": "box", "origin": "ground"})
+		inv.append(Data.make_item("box", Vector3.ONE, 0, "ground"))
 	return inv

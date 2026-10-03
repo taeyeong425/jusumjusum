@@ -45,8 +45,8 @@ func _ready() -> void:
 	hv.add_child(UI.label("이렇게 놀아요", 26, UI.INK, true))
 	for line in [
 		"1. 라운드마다 만들 물건(타겟)과 이번 판 재료 편성이 공개됩니다",
-		"2. 놀이터를 돌아다니며 덩어리를 줍고, 차·집·선풍기를 [E]를 꾹 눌러 뜯으세요",
-		"3. 작업대에서 덩어리를 늘리고 눌러서 타겟을 만듭니다",
+		"2. 놀이터를 돌아다니며 조준해서 [E]로 줍고, 차·기차·집·선풍기는 [E] 꾹 눌러 뜯으세요",
+		"3. 작업대에서 덩어리를 옮기고, 크기·회전 손잡이로 다듬어 타겟을 만듭니다",
 		"4. 전원의 작품을 돌려보며 ★를 매깁니다 (★5는 한 번만)",
 		"5. ★ 기준을 넘은 사람이 할당량만큼 있으면 다음 라운드!  못 넘으면 끝",
 		"   ※ 지금은 프로토타입이라 나머지 5명은 봇입니다",
@@ -54,7 +54,7 @@ func _ready() -> void:
 		hv.add_child(UI.label(line, 21, UI.SOFT))
 	col.add_child(help)
 
-	var credit := UI.label("프로토타입 v0.1 · Godot 4.7 · 폰트 Gaegu · 나눔고딕 (OFL)", 18, Color(UI.SOFT, 0.7))
+	var credit := UI.label("프로토타입 v0.2 · Godot 4.7 · 폰트 Gaegu · 나눔고딕 (OFL) · 효과음 Kenney (CC0)", 18, Color(UI.SOFT, 0.7))
 	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(credit)
 

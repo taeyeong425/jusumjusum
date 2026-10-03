@@ -17,7 +17,18 @@ var current: Node
 func _ready() -> void:
 	get_window().theme = UI.theme()
 	Game.main = self
-	if Game.autotest:
+	if "--bench" in OS.get_cmdline_user_args():
+		Game.new_game()
+		goto("collect")
+		var t := get_tree().create_timer(6.0)
+		t.timeout.connect(func():
+			var info := "fps=%d draw_calls=%d objects=%d primitives=%d" % [Engine.get_frames_per_second(),
+				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
+			print("[bench] ", info)
+			get_tree().quit())
+	elif Game.autotest:
 		Game.new_game()
 		goto("reveal")
 	else:

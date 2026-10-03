@@ -163,7 +163,7 @@ static func recognize(work: Array, tpl: Dictionary) -> float:
 ## 인식 점수 → 봇의 별점
 ## 대비 곡선: 무작위 더미(≈0.33)는 ★1~2, 잘 만든 것(≈0.85)은 ★4~5가 되도록 펼친다.
 static func perceived(score: float) -> float:
-	return clampf((score - 0.3) / 0.6, 0.0, 1.0)
+	return clampf((score - 0.25) / 0.57, 0.0, 1.0)
 
 
 static func bot_star(score: float, bias: float, rng: RandomNumberGenerator) -> int:
@@ -260,8 +260,7 @@ static func card_constraint(card: Dictionary, work: Array, inventory_size: int) 
 			return false
 		"honest":
 			for d in work:
-				var s: Vector3 = d["s"]
-				if absf(s.x - 1) > 0.05 or absf(s.y - 1) > 0.05 or absf(s.z - 1) > 0.05:
+				if absf(float(d.get("k", 1.0)) - 1.0) > 0.05:
 					return false
 			return true
 		"curvy":

@@ -2,7 +2,7 @@
 
 [ext_resource type="FontFile" path="res://assets/fonts/Gaegu-Regular.ttf" id="1_5x3i2"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wl1kw"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5x3i2"]
 content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
@@ -18,7 +18,7 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lu33j"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wl1kw"]
 content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
@@ -34,7 +34,7 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wycmq"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lu33j"]
 content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
@@ -50,7 +50,7 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_x2pqw"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wycmq"]
 content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
@@ -66,7 +66,7 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e8htd"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_x2pqw"]
 content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
@@ -82,7 +82,7 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wms38"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e8htd"]
 content_margin_left = 16.0
 content_margin_top = 12.0
 content_margin_right = 16.0
@@ -105,10 +105,10 @@ Button/colors/font_color = Color(0.23137255, 0.1882353, 0.14117648, 1)
 Button/colors/font_disabled_color = Color(0.65882355, 0.6117647, 0.54901963, 1)
 Button/colors/font_hover_color = Color(0.23137255, 0.1882353, 0.14117648, 1)
 Button/colors/font_pressed_color = Color(0.23137255, 0.1882353, 0.14117648, 1)
-Button/styles/disabled = SubResource("StyleBoxFlat_wl1kw")
-Button/styles/focus = SubResource("StyleBoxFlat_lu33j")
-Button/styles/hover = SubResource("StyleBoxFlat_wycmq")
-Button/styles/normal = SubResource("StyleBoxFlat_x2pqw")
-Button/styles/pressed = SubResource("StyleBoxFlat_e8htd")
+Button/styles/disabled = SubResource("StyleBoxFlat_5x3i2")
+Button/styles/focus = SubResource("StyleBoxFlat_wl1kw")
+Button/styles/hover = SubResource("StyleBoxFlat_lu33j")
+Button/styles/normal = SubResource("StyleBoxFlat_wycmq")
+Button/styles/pressed = SubResource("StyleBoxFlat_x2pqw")
 Label/colors/font_color = Color(0.23137255, 0.1882353, 0.14117648, 1)
-PanelContainer/styles/panel = SubResource("StyleBoxFlat_wms38")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_e8htd")
