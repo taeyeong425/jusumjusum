@@ -41,7 +41,7 @@ func t_build() -> float:
 
 
 func t_exhibit() -> float:
-	return 0.2 if autotest else (6.0 if short_mode else 10.0)
+	return 0.6 if autotest else (6.0 if short_mode else 10.0)
 
 
 func new_game() -> void:

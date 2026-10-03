@@ -14,6 +14,7 @@ var pscale := Vector3.ONE
 var color_idx := 0
 var origin := "ground"
 var inv_index := -1
+var big := false      # 크게 키운 덩어리(받침대·모래밭 등)는 외곽선이 같이 두꺼워지므로 외곽선 없이
 
 var vis: Node3D
 var mesh_inst: MeshInstance3D
@@ -56,6 +57,10 @@ func set_pscale(s: Vector3, clamp := true) -> void:
 		s = Vector3(clampf(s.x, Data.SCALE_MIN, Data.SCALE_MAX), clampf(s.y, Data.SCALE_MIN, Data.SCALE_MAX), clampf(s.z, Data.SCALE_MIN, Data.SCALE_MAX))
 	pscale = s
 	vis.scale = s
+	var was_big := big
+	big = maxf(s.x, maxf(s.y, s.z)) > 3.2
+	if big != was_big:
+		mesh_inst.material_override = _mat()
 	if shape_node:
 		var pts := PackedVector3Array()
 		for p in Data.collision_points(type):
@@ -65,9 +70,13 @@ func set_pscale(s: Vector3, clamp := true) -> void:
 		shape_node.shape = cs
 
 
+func _mat() -> StandardMaterial3D:
+	return Data.plain_material(color_idx) if big else Data.material(color_idx)
+
+
 func set_color(ci: int) -> void:
 	color_idx = ci
-	mesh_inst.material_override = Data.material(ci)
+	mesh_inst.material_override = _mat()
 
 
 func set_rusty() -> void:
@@ -76,13 +85,13 @@ func set_rusty() -> void:
 
 func set_highlight(on: bool) -> void:
 	if on:
-		var m: StandardMaterial3D = Data.material(color_idx).duplicate()
+		var m: StandardMaterial3D = _mat().duplicate()
 		m.emission_enabled = true
 		m.emission = Color(1, 0.85, 0.4)
 		m.emission_energy_multiplier = 0.45
 		mesh_inst.material_override = m
 	else:
-		mesh_inst.material_override = Data.material(color_idx)
+		mesh_inst.material_override = _mat()
 
 
 func world_half_extents() -> Vector3:

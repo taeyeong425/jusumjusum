@@ -5,7 +5,7 @@ extends Node3D
 
 const SPEED := 5.0
 const GRAVITY := 22.0
-const JUMP_V := 7.5
+const JUMP_V := 8.6
 const HOLD_MAX := 12
 const REACH := 3.6
 const AIM_DEG := 20.0
@@ -30,8 +30,11 @@ var boundary: PackedVector2Array
 var road_path: Array = []
 var rail_path: Array = []
 var wanted := {}
+var obstacles: Array = []      # [중심 xz, 반크기 xz, 회전] — 바닥 덩어리를 건물 안에 두지 않기 위해
 
-var aim: Dictionary = {}
+var aim: Dictionary = {}          # 커서 아래 있는 것
+var act: Dictionary = {}          # 클릭해서 하러 가는 것 (걸어가서 줍기/뜯기)
+var zoom := 6.0
 var hold_target: Dictionary = {}
 var hold_prog := 0.0
 var tick_t := 0.0
@@ -43,13 +46,12 @@ var was_floor := true
 var hud_time: Label
 var hud_prompt: Label
 var hud_bar: ProgressBar
+var fx: Control                  # 손 + 원형 게이지
 var hotbar: HBoxContainer
 var hot_slots: Array = []
 var minimap: Control
 var toast: Label
 var toast_t := 0.0
-var capture_hint: Label
-var crosshair: Control
 
 
 func _ready() -> void:
@@ -121,7 +123,10 @@ func _assemble(root: Node3D, parts: Array) -> void:
 		root.add_child(pc)
 		if true:
 			var item := Data.make_item(t, shp, p[2], "tear")
-			var e := {"node": pc, "item": item, "hold": float(p[7]) if p.size() > 7 else 1.6,
+			var hold: float = float(p[7]) if p.size() > 7 else 1.6
+			if root is AnimatableBody3D:
+				hold = maxf(0.4, hold * 0.3)   # 움직이는 차·기차 부품은 쫓아가서 잠깐 잡으면 된다
+			var e := {"node": pc, "item": item, "hold": hold,
 				"name": tear_name, "alive": true, "bolted": false, "dig": false, "uses": 1}
 			pc.set_meta("entry", e)
 			tears.append(e)
@@ -150,6 +155,9 @@ func _solid(parent: Node3D, pos: Vector3, size: Vector3, yaw := 0.0) -> StaticBo
 	cs.position.y = size.y * 0.5
 	b.add_child(cs)
 	parent.add_child(b)
+	if parent == world or parent.get_parent() == world:
+		var g: Transform3D = (parent.transform if parent != world else Transform3D.IDENTITY) * b.transform
+		obstacles.append([Vector2(g.origin.x, g.origin.z), Vector2(size.x, size.z) * 0.5, -g.basis.get_euler().y])
 	return b
 
 
@@ -694,12 +702,12 @@ func _build_vehicles() -> void:
 	var road_len: float = _path_len(road_path)[-1]
 	var cols := [2, 8, 4]
 	for i in 3:
-		_vehicle(_car, cols[i], road_path, road_len * i / 3.0, 2.8, [road_len * (i * 0.33 + 0.12)], Vector3(2.3, 1.6, 1.3))
+		_vehicle(_car, cols[i], road_path, road_len * i / 3.0, 2.8, [road_len * (i * 0.33 + 0.12)], Vector3(2.3, 1.25, 1.3))
 	# 기차: 역(각도 0)에서 선다
 	var loco := _vehicle(_loco, null, rail_path, 6.0, 3.4, [0.0], Vector3(2.9, 2.8, 1.4))
 	var prev := loco
 	for k in 2:
-		var w := _vehicle(_wagon, k, rail_path, 6.0 - 3.2 * (k + 1), 3.4, [], Vector3(2.7, 1.6, 1.3))
+		var w := _vehicle(_wagon, k, rail_path, 6.0 - 3.2 * (k + 1), 3.4, [], Vector3(2.7, 1.0, 1.3))
 		w["follow"] = loco
 		w["gap"] = 3.2 * (k + 1)
 		prev = w
@@ -757,6 +765,29 @@ func _inside(p: Vector2, margin := 2.0) -> bool:
 	return p.length() < _boundary_r(a) - margin
 
 
+func _path_dist(p: Vector2, path: Array) -> float:
+	var best := INF
+	for i in path.size():
+		var a: Vector3 = path[i]
+		var b: Vector3 = path[(i + 1) % path.size()]
+		best = minf(best, Geometry2D.get_closest_point_to_segment(p, Vector2(a.x, a.z), Vector2(b.x, b.z)).distance_to(p))
+	return best
+
+
+## 바닥 덩어리를 놓아도 되는 자리인가 — 울타리 안, 건물·기물 밖, 도로·레일 위가 아님
+func _free_spot(p: Vector2) -> bool:
+	if not _inside(p):
+		return false
+	if _path_dist(p, road_path) < 2.3 or _path_dist(p, rail_path) < 1.6:
+		return false
+	for o in obstacles:
+		var local: Vector2 = (p - o[0]).rotated(-o[2])
+		var hh: Vector2 = o[1] + Vector2(0.7, 0.7)
+		if absf(local.x) < hh.x and absf(local.y) < hh.y:
+			return false
+	return true
+
+
 func _spawn_ground_items() -> void:
 	var left: Dictionary = Game.get_meta("ground_left")
 	var rng := Game.rng
@@ -773,9 +804,14 @@ func _spawn_ground_items() -> void:
 		for k in n:
 			var cs: Array = zones[Data.KIND[t]]
 			var c: Vector2 = cs[rng.randi() % cs.size()]
-			var p := c + Vector2(rng.randfn(0, 4.5), rng.randfn(0, 4.5))
-			if not _inside(p):
-				p = c
+			var p := c
+			for tries in 12:
+				var cand := c + Vector2(rng.randfn(0, 4.5), rng.randfn(0, 4.5))
+				if _free_spot(cand):
+					p = cand
+					break
+			if not _free_spot(p):
+				continue
 			_add_ground(Data.random_item(t, "ground", rng), Vector3(p.x, 0, p.y))
 
 
@@ -985,6 +1021,20 @@ func _human_step(a: Dictionary, delta: float) -> void:
 	if dir != Vector2.ZERO:
 		dir = dir.normalized()
 		v = Basis(Vector3.UP, cam_yaw) * Vector3(dir.x, 0, dir.y)
+		_cancel_act()   # 직접 움직이면 자동 이동 취소
+	# 클릭한 것을 하러 간다
+	var doing := false
+	if not act.is_empty():
+		if not act["alive"] or act.get("bolted", false) or not is_instance_valid(act["node"]):
+			_cancel_act()
+		else:
+			var tp: Vector3 = (act["node"] as Node3D).global_position
+			var to := Vector3(tp.x - body.position.x, 0, tp.z - body.position.z)
+			var reach := 1.4 if not act.has("hold") else 2.2
+			if to.length() > reach:
+				v = to.normalized()
+			else:
+				doing = true
 	_move_body(a, v, delta, jump_req)
 	jump_req = false
 	if body.is_on_floor() and not was_floor:
@@ -995,71 +1045,148 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		if step_t <= 0:
 			step_t = 0.36
 			Sfx.play("step", -16.0, 0.12)
-	# 뜯기: [E] 또는 좌클릭을 누르고 있는 동안
 	hud_bar.visible = false
-	var holding := Input.is_physical_key_pressed(KEY_E) or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
-	if aim.is_empty() or not aim.has("hold") or aim["bolted"] or not holding or _inv(a).size() >= HOLD_MAX:
+	if not doing:
 		hold_prog = 0.0
-		hold_target = {}
+		_wobble(false)
 		return
-	if hold_target != aim:
-		hold_target = aim
-		hold_prog = 0.0
-	hold_prog += delta / aim["hold"]
+	if _inv(a).size() >= HOLD_MAX:
+		_toast("가방이 꽉 찼다 — [Q]로 하나 버리기")
+		Sfx.play("error", -6.0)
+		_cancel_act()
+		return
+	if not act.has("hold"):
+		_fly(act["node"], a)
+		_take_ground(a, act)
+		_cancel_act()
+		return
+	# 뜯기: 도착하면 알아서 끝까지 (손 뗄 필요 없음)
+	body.rotation.y = lerp_angle(body.rotation.y, atan2(-((act["node"] as Node3D).global_position.x - body.position.x), -((act["node"] as Node3D).global_position.z - body.position.z)), 0.3)
+	hold_prog += delta / act["hold"]
 	tick_t -= delta
 	if tick_t <= 0:
 		tick_t = 0.3
 		Sfx.play("tick", -6.0, 0.15)
-	hud_bar.visible = true
-	hud_bar.value = hold_prog * 100
+	_wobble(true)
 	if hold_prog >= 1.0:
 		hold_prog = 0.0
-		_finish_tear(a, aim)
+		_wobble(false)
+		_fly(act["node"], a)
+		_finish_tear(a, act)
+		_cancel_act()
 
 
-## 화면 가운데 조준점에 가장 가까이 걸린, 손이 닿는 것
+func _cancel_act() -> void:
+	_wobble(false)
+	if not act.is_empty() and is_instance_valid(act["node"]) and act != aim and not act.get("bolted", false):
+		(act["node"] as Piece).set_highlight(false)
+	act = {}
+	hold_prog = 0.0
+
+
+## 뜯는 동안 부품이 흔들리며 캐릭터 쪽으로 끌려온다
+func _wobble(on: bool) -> void:
+	if act.is_empty() or not is_instance_valid(act["node"]):
+		return
+	var pc: Piece = act["node"]
+	if not on or act.get("dig", false):
+		pc.vis.position = Vector3.ZERO
+		return
+	var me: Vector3 = actors[0]["body"].global_position + Vector3(0, 1.2, 0)
+	var toward := pc.global_transform.affine_inverse().basis * (me - pc.global_position)
+	var shake := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.035
+	pc.vis.position = toward.normalized() * hold_prog * minf(0.5, toward.length() * 0.2) + shake * (0.4 + hold_prog)
+
+
+## 손에 들어오는 순간: 그 모양 그대로 캐릭터 쪽으로 날아와 쏙
+func _fly(src: Node3D, a: Dictionary) -> void:
+	var e: Dictionary = src.get_meta("entry") if src.has_meta("entry") else {}
+	var item: Dictionary = e.get("item", {})
+	if item.is_empty():
+		return
+	var pc := Piece.from_item(item, false)
+	world.add_child(pc)
+	pc.global_transform = (src as Node3D).global_transform
+	pc.set_pscale((src as Piece).pscale, false)
+	var target: Vector3 = a["body"].global_position + Vector3(0, 1.9, 0)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(pc, "global_position", target, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(pc, "scale", Vector3.ONE * 0.25, 0.32).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(pc.queue_free)
+
+
+## 원형 게이지 + 손. 대상 위에서 한 바퀴 돌며 차오르고, 손이 오므라들며 당긴다.
+func _draw_fx() -> void:
+	if act.is_empty() or hold_prog <= 0.0 or not is_instance_valid(act["node"]):
+		return
+	var wp: Vector3 = (act["node"] as Node3D).global_position
+	if cam.is_position_behind(wp):
+		return
+	var c := cam.unproject_position(wp)
+	var me := cam.unproject_position(actors[0]["body"].global_position + Vector3(0, 1.2, 0))
+	var R := 34.0
+	fx.draw_circle(c, R + 4, Color(1, 1, 1, 0.55))
+	fx.draw_arc(c, R, 0, TAU, 40, Color(UI.INK, 0.25), 7.0)
+	fx.draw_arc(c, R, -PI / 2, -PI / 2 + TAU * clampf(hold_prog, 0, 1), 40, UI.ACCENT, 7.0)
+	# 손: 진행할수록 손가락이 오므라들고, 캐릭터 쪽으로 끌려간다
+	var hc := c.lerp(me, clampf(hold_prog, 0, 1) * 0.22)
+	var grip := clampf(hold_prog * 1.3, 0.0, 1.0)
+	var skin := Color("#F6D2B0")
+	var ink := Color(UI.INK, 0.9)
+	var palm := Rect2(hc + Vector2(-10, -2), Vector2(20, 18))
+	for i in 4:
+		var fx0 := hc.x - 9 + i * 6
+		var flen := lerpf(16.0, 5.0, grip) - (2.0 if i == 0 or i == 3 else 0.0)
+		var fr := Rect2(Vector2(fx0, hc.y - 2 - flen), Vector2(5, flen + 2))
+		fx.draw_rect(fr, skin)
+		fx.draw_rect(fr, ink, false, 1.2)
+	fx.draw_rect(palm, skin)
+	fx.draw_rect(palm, ink, false, 1.5)
+	var th0 := hc + Vector2(-10, 6)
+	var th1 := th0 + Vector2(lerpf(-9, 2, grip), lerpf(-8, -4, grip))
+	fx.draw_line(th0, th1, ink, 7.0)
+	fx.draw_line(th0, th1, skin, 4.5)
+
+
+## 마우스 커서 아래 있는 것 (커서는 늘 자유롭게 움직인다)
 func _update_aim() -> void:
-	var body: CharacterBody3D = actors[0]["body"]
-	var origin := cam.global_position
-	var fwd := -cam.global_transform.basis.z
 	var best: Dictionary = {}
-	var best_a := deg_to_rad(AIM_DEG)
-	var me := body.global_position + Vector3(0, 0.9, 0)
-	for list in [ground, tears]:
-		for e in list:
-			if not e["alive"]:
-				continue
-			var n: Piece = e["node"]
-			if not n.visible:
-				continue
-			var p := n.global_position
-			if p.distance_to(me) > REACH:
-				continue
-			var ang := fwd.angle_to(p - origin)
-			if ang < best_a:
-				best_a = ang
+	var mouse := get_viewport().get_mouse_position()
+	var from := cam.project_ray_origin(mouse)
+	var q := PhysicsRayQueryParameters3D.create(from, from + cam.project_ray_normal(mouse) * 70.0, L_ITEM)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit and hit["collider"].has_meta("piece"):
+		var pc: Piece = hit["collider"].get_meta("piece")
+		if pc.has_meta("entry"):
+			var e: Dictionary = pc.get_meta("entry")
+			if e["alive"] and pc.visible:
 				best = e
 	if best != aim:
-		if not aim.is_empty() and is_instance_valid(aim["node"]) and not aim.get("bolted", false):
+		if not aim.is_empty() and is_instance_valid(aim["node"]) and not aim.get("bolted", false) and aim != act:
 			(aim["node"] as Piece).set_highlight(false)
 		aim = best
 		if not aim.is_empty() and not aim.get("bolted", false):
 			(aim["node"] as Piece).set_highlight(true)
-	if aim.is_empty():
+	var target: Dictionary = aim if not aim.is_empty() else act
+	if target.is_empty():
 		hud_prompt.text = ""
-	elif aim.has("hold"):
-		if aim["bolted"]:
-			var t: String = aim["item"]["type"]
+		return
+	var me: Vector3 = actors[0]["body"].global_position
+	var far: bool = (target["node"] as Node3D).global_position.distance_to(me) > REACH
+	var verb := "클릭 — 가서 " if far else "클릭 — "
+	if target == act and aim.is_empty():
+		verb = "가는 중 — "
+	if target.has("hold"):
+		if target["bolted"]:
+			var t: String = target["item"]["type"]
 			var scarce: bool = Game.counts.get(t, 0) < float(Game.PLAYERS * 24) / Data.TYPES.size() * 0.6
-			hud_prompt.text = "%s — 녹슬어서 안 빠진다%s" % [aim["name"], ("  (이번 판엔 %s가 귀하다)" % Data.NAMES[t]) if scarce else ""]
-		elif _inv(actors[0]).size() >= HOLD_MAX:
-			hud_prompt.text = "가방이 꽉 찼다 — [Q]로 하나 버리기"
-		elif aim["dig"]:
-			hud_prompt.text = "[E] 꾹 — 모래 파기 → 뭐가 나올지 몰라요"
+			hud_prompt.text = "%s — 녹슬어서 안 빠진다%s" % [target["name"], ("  (이번 판엔 %s가 귀하다)" % Data.NAMES[t]) if scarce else ""]
+		elif target["dig"]:
+			hud_prompt.text = "%s모래 파기 → 뭐가 나올지 몰라요" % verb
 		else:
-			hud_prompt.text = "[E] 꾹 — %s 뜯기 → %s" % [aim["name"], aim["item"]["name"]]
+			hud_prompt.text = "%s%s 뜯기 → %s" % [verb, target["name"], target["item"]["name"]]
 	else:
-		hud_prompt.text = "[E] 줍기 — %s (%s)" % [aim["item"]["name"], Data.palette()[aim["item"]["color"]]["name"]]
+		hud_prompt.text = "%s줍기 — %s (%s)" % [verb, target["item"]["name"], Data.palette()[target["item"]["color"]]["name"]]
 
 
 func _drop_selected() -> void:
@@ -1163,7 +1290,7 @@ func _build_camera() -> void:
 	cam_pivot = Node3D.new()
 	add_child(cam_pivot)
 	spring = SpringArm3D.new()
-	spring.spring_length = 5.2
+	spring.spring_length = zoom
 	spring.collision_mask = L_WORLD
 	spring.margin = 0.3
 	var sph := SphereShape3D.new()
@@ -1182,6 +1309,7 @@ func _update_camera() -> void:
 	var target := body.global_position + Vector3(0, 1.75, 0)
 	cam_pivot.global_position = cam_pivot.global_position.lerp(target, 0.35) if cam_pivot.global_position.distance_to(target) < 6 else target
 	cam_pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
+	spring.spring_length = lerpf(spring.spring_length, zoom, 0.2)
 
 
 func _update_visibility() -> void:
@@ -1194,44 +1322,43 @@ func _update_visibility() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if finished:
 		return
-	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and (captured or (event.button_mask & MOUSE_BUTTON_MASK_RIGHT)):
-		cam_yaw -= event.relative.x * 0.0045
-		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0035, -1.25, 0.45)
+	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_RIGHT):
+		cam_yaw -= event.relative.x * 0.006
+		cam_pitch = clampf(cam_pitch - event.relative.y * 0.005, -1.25, 0.35)
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				if not captured:
-					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-					capture_hint.visible = false
-				else:
-					_try_pick()
+				_try_pick()
 			MOUSE_BUTTON_WHEEL_UP:
-				_select_slot(slot - 1)
+				zoom = clampf(zoom - 0.6, 3.0, 11.0)
 			MOUSE_BUTTON_WHEEL_DOWN:
-				_select_slot(slot + 1)
+				zoom = clampf(zoom + 0.6, 3.0, 11.0)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_SPACE: jump_req = true
 			KEY_E: _try_pick()
 			KEY_Q: _drop_selected()
-			KEY_ESCAPE, KEY_TAB:
-				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-				capture_hint.visible = true
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
 				_select_slot(event.physical_keycode - KEY_1)
 			KEY_0: _select_slot(9)
 
 
+## 커서 아래 것을 클릭 — 멀면 걸어가서, 가까우면 바로. 뜯기는 도착해서 알아서 끝까지.
 func _try_pick() -> void:
-	if aim.is_empty() or aim.has("hold"):
+	if aim.is_empty():
+		return
+	if aim.has("hold") and aim["bolted"]:
+		Sfx.play("error", -8.0)
 		return
 	if _inv(actors[0]).size() >= HOLD_MAX:
 		Sfx.play("error", -6.0)
 		_toast("가방이 꽉 찼다 — [Q]로 버리고 줍자")
 		return
-	_take_ground(actors[0], aim)
-	aim = {}
+	if act != aim:
+		_cancel_act()
+	act = aim
+	(act["node"] as Piece).set_highlight(true)
+	Sfx.play("select", -12.0)
 
 
 func _select_slot(i: int) -> void:
@@ -1260,6 +1387,11 @@ func _build_hud() -> void:
 	layer.add_child(tl)
 	UI.corner(tl, Control.PRESET_TOP_LEFT)
 
+	fx = Control.new()
+	fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx.draw.connect(_draw_fx)
+	layer.add_child(UI.full(fx))
+
 	minimap = Control.new()
 	minimap.custom_minimum_size = Vector2(190, 190)
 	minimap.draw.connect(_draw_minimap)
@@ -1282,7 +1414,7 @@ func _build_hud() -> void:
 		cell.gui_input.connect(func(ev): _slot_input(ev, idx))
 		hotbar.add_child(cell)
 		hot_slots.append(cell)
-	var help := UI.label("WASD 이동 · 마우스 시점 · Space 점프 · [E]/좌클릭 줍기 · [E] 꾹 뜯기 · 휠/숫자 칸 고르기 · [Q] 버리기 · Esc 마우스 풀기", 16, UI.SOFT)
+	var help := UI.label("클릭: 가서 줍기·뜯기 · WASD 이동 · 우클릭 끌기: 시점 · 휠: 줌 · Space 점프 · 숫자: 칸 고르기 · [Q] 버리기", 16, UI.SOFT)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(help)
 	layer.add_child(bar)
@@ -1309,19 +1441,6 @@ func _build_hud() -> void:
 	layer.add_child(cv)
 	UI.corner(cv, Control.PRESET_CENTER_BOTTOM, Vector2(0, 118))
 
-	crosshair = Control.new()
-	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	crosshair.draw.connect(func():
-		var c := crosshair.size * 0.5
-		crosshair.draw_circle(c, 4.5, Color(1, 1, 1, 0.9))
-		crosshair.draw_arc(c, 6.0, 0, TAU, 20, Color(UI.INK, 0.8), 1.5))
-	layer.add_child(UI.full(crosshair))
-
-	capture_hint = UI.label("화면을 클릭하면 마우스로 둘러볼 수 있어요  (Esc로 풀기)", 24, UI.INK, true)
-	capture_hint.add_theme_color_override("font_outline_color", Color.WHITE)
-	capture_hint.add_theme_constant_override("outline_size", 10)
-	layer.add_child(capture_hint)
-	UI.corner(capture_hint, Control.PRESET_CENTER_TOP, Vector2(0, 30))
 	_refresh_hotbar()
 
 
@@ -1371,8 +1490,8 @@ func _update_hud(delta: float) -> void:
 	toast_t -= delta
 	if toast_t <= 0:
 		toast.text = ""
-	crosshair.visible = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	minimap.queue_redraw()
+	fx.queue_redraw()
 
 
 func _draw_minimap() -> void:
@@ -1415,7 +1534,6 @@ func _end() -> void:
 	if finished:
 		return
 	finished = true
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var rng := Game.rng
 	var alive := []
 	for g in ground:

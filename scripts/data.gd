@@ -430,3 +430,13 @@ static func rust_material() -> StandardMaterial3D:
 		_rust.metallic_specular = 0.1
 		_rust.next_pass = outline_material()
 	return _rust
+
+
+static var _plain := {}
+## 외곽선 없는 같은 색 재질 (아주 크게 키운 덩어리용)
+static func plain_material(ci: int) -> StandardMaterial3D:
+	if not _plain.has(ci):
+		var m: StandardMaterial3D = material(ci).duplicate()
+		m.next_pass = null
+		_plain[ci] = m
+	return _plain[ci]

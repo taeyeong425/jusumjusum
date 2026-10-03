@@ -1,8 +1,72 @@
 extends Node3D
 ## 전시 · 평가 — 익명 · 랜덤 순서 · 작품당 10초 회전 (§9.1)
-## 자기 작품 제외 ★1~5. 평가자당 ★5는 1개만 (§9.2)
+## 별 위를 끌어서 0.0~5.0 (0.1 단위). 4.6 이상은 평가자당 한 작품만 (§9.2)
 
 const LETTERS := ["A", "B", "C", "D", "E", "F"]
+
+
+## 별 다섯 개 위를 끌어서 점수를 매기는 막대
+class RatingBar extends Control:
+	signal changed(v: float)
+	var value := 3.0
+	var max_v := 5.0
+	var dragging := false
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(420, 72)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+			dragging = ev.pressed
+			if ev.pressed:
+				_set_from(ev.position.x)
+		elif ev is InputEventMouseMotion and dragging:
+			_set_from(ev.position.x)
+
+	func _set_from(x: float) -> void:
+		var v := snappedf(clampf(x / size.x * 5.0, 0.0, max_v), 0.1)
+		if absf(v - value) > 0.001:
+			if floori(v * 2) != floori(value * 2):
+				UI.sfx("star", -14.0)
+			value = v
+			changed.emit(v)
+			queue_redraw()
+
+	func set_value(v: float) -> void:
+		value = clampf(v, 0.0, max_v)
+		queue_redraw()
+
+	func _star(c: Vector2, r: float) -> PackedVector2Array:
+		var pts := PackedVector2Array()
+		for i in 10:
+			var a := -PI / 2 + PI * i / 5.0
+			var rr := r if i % 2 == 0 else r * 0.45
+			pts.append(c + Vector2(cos(a), sin(a)) * rr)
+		return pts
+
+	func _draw() -> void:
+		var w := size.x / 5.0
+		var r := minf(w, size.y) * 0.44
+		for i in 5:
+			var c := Vector2(w * (i + 0.5), size.y * 0.5)
+			var st := _star(c, r)
+			draw_colored_polygon(st, Color("#E8E1D6"))
+			var f := clampf(value - i, 0.0, 1.0)
+			if f > 0.0:
+				var x1 := c.x - r + 2 * r * f
+				var clip := PackedVector2Array([Vector2(c.x - r - 1, c.y - r - 1), Vector2(x1, c.y - r - 1), Vector2(x1, c.y + r + 1), Vector2(c.x - r - 1, c.y + r + 1)])
+				for poly in Geometry2D.intersect_polygons(st, clip):
+					draw_colored_polygon(poly, Color("#F4B942"))
+			var closed := st.duplicate()
+			closed.append(st[0])
+			draw_polyline(closed, Color(UI.INK, 0.8), 2.0)
+		if max_v < 5.0:
+			var xm := size.x * max_v / 5.0
+			draw_rect(Rect2(xm, 0, size.x - xm, size.y), Color(1, 1, 1, 0.55))
+			draw_line(Vector2(xm, 4), Vector2(xm, size.y - 4), UI.BAD, 2.0)
+
 
 var order: Array = []
 var idx := 0
@@ -13,9 +77,10 @@ var cam: Camera3D
 var title: Label
 var sub: Label
 var timer_l: Label
-var star_row: HBoxContainer
-var star_btns: Array = []
-var five_l: Label
+var rate_box: VBoxContainer
+var bar: RatingBar
+var value_l: Label
+var top_l: Label
 var done := false
 
 
@@ -24,23 +89,19 @@ func _ready() -> void:
 	for i in Game.players.size():
 		order.append(i)
 	order.shuffle()
-	Game.set_meta("letters", {})
 	var letters := {}
 	for k in order.size():
 		letters[order[k]] = LETTERS[k]
 	Game.set_meta("letters", letters)
 	UI.make_env(self, Color("#F2E6D0"))
-	var ped := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 1.5; cm.bottom_radius = 1.6; cm.height = 0.4
-	ped.mesh = cm
-	ped.position.y = -0.2
-	ped.material_override = Data.flat_material(Color("#FFFFFF"))
+	var ped := Piece.new().setup("cylinder", 0, false)
+	ped.set_pscale(Vector3(6.2, 0.7, 6.2), false)
+	ped.position.y = -0.21
 	add_child(ped)
 	var fl := MeshInstance3D.new()
 	var pm := PlaneMesh.new(); pm.size = Vector2(40, 40)
 	fl.mesh = pm
-	fl.position.y = -0.4
+	fl.position.y = -0.42
 	fl.material_override = Data.flat_material(Color("#D8C3A0"))
 	add_child(fl)
 	pivot = Node3D.new()
@@ -72,17 +133,20 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.vbox(6)
 	bottom.add_child(bv)
-	star_row = UI.hbox(8)
-	bv.add_child(star_row)
-	for s in range(1, 6):
-		var stars := s
-		var b := UI.button(UI.stars(s), func(): _rate(stars), 26)
-		b.toggle_mode = true
-		star_row.add_child(b)
-		star_btns.append(b)
-	five_l = UI.label("", 20, UI.SOFT)
-	five_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bv.add_child(five_l)
+	rate_box = UI.vbox(4)
+	bv.add_child(rate_box)
+	var row := UI.hbox(16)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	rate_box.add_child(row)
+	bar = RatingBar.new()
+	bar.changed.connect(_rate)
+	row.add_child(bar)
+	value_l = UI.label("", 48, UI.INK, true)
+	value_l.custom_minimum_size.x = 90
+	row.add_child(value_l)
+	top_l = UI.label("", 19, UI.SOFT)
+	top_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rate_box.add_child(top_l)
 	var h := UI.hbox(12)
 	bv.add_child(h)
 	timer_l = UI.label("", 24, UI.SOFT)
@@ -107,28 +171,27 @@ func _show(k: int) -> void:
 	var letter: String = Game.get_meta("letters")[who]
 	title.text = "작품 %s  (%d / %d)" % [letter, k + 1, order.size()]
 	var mine := who == 0
-	sub.text = ("내 작품이에요 — 평가는 안 해요" if mine else "「%s」처럼 보이나요?" % Game.target["name"])
-	star_row.visible = not mine
-	_refresh_stars()
+	sub.text = ("내 작품이에요 — 평가는 안 해요" if mine else "「%s」처럼 보이나요?  별 위를 끌어서 점수를 매기세요" % Game.target["name"])
+	rate_box.visible = not mine
+	_refresh()
 
 
-func _refresh_stars() -> void:
+## 4.6 이상은 한 작품만 — 다른 작품에 이미 줬으면 이 작품은 4.5까지
+func _refresh() -> void:
 	var who: int = order[idx]
-	var cur: int = Game.human_ratings.get(who, 0)
-	var five_used := false
+	var top_used := false
 	for w in Game.human_ratings:
-		if Game.human_ratings[w] == 5 and w != who:
-			five_used = true
-	for s in range(1, 6):
-		var b: Button = star_btns[s - 1]
-		b.set_pressed_no_signal(cur == s)
-		b.disabled = s == 5 and five_used
-	five_l.text = "★5는 한 번만 줄 수 있어요 — 이미 썼어요" if five_used else "★5는 한 번만 줄 수 있어요"
+		if w != who and Game.human_ratings[w] >= Judge.TOP - 0.001:
+			top_used = true
+	bar.max_v = Judge.TOP_CAP if top_used else 5.0
+	bar.set_value(Game.human_ratings.get(who, 3.0))
+	value_l.text = "%.1f" % bar.value
+	top_l.text = ("4.6점 이상은 한 작품만 — 이미 다른 작품에 줬어요" if top_used else "4.6점 이상은 한 작품에만 줄 수 있어요")
 
 
-func _rate(s: int) -> void:
-	Game.human_ratings[order[idx]] = s
-	_refresh_stars()
+func _rate(v: float) -> void:
+	Game.human_ratings[order[idx]] = v
+	value_l.text = "%.1f" % v
 
 
 func _process(delta: float) -> void:
@@ -140,7 +203,8 @@ func _process(delta: float) -> void:
 	if Game.autotest:
 		var who: int = order[idx]
 		if who != 0 and not Game.human_ratings.has(who):
-			_rate(Game.rng.randi_range(2, 4))
+			bar.set_value(snappedf(Game.rng.randf_range(2.0, 4.4), 0.1))
+			_rate(bar.value)
 	if t <= 0:
 		_next()
 
@@ -154,5 +218,5 @@ func _next() -> void:
 		done = true
 		for w in Game.players.size():
 			if w != 0 and not Game.human_ratings.has(w):
-				Game.human_ratings[w] = 3
+				Game.human_ratings[w] = 3.0
 		Game.goto("settle")

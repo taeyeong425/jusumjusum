@@ -34,6 +34,7 @@ var press_pos := Vector2.ZERO
 var size0 := 1.0
 var dist0 := 1.0
 var pushed := false
+var grab_off := Vector3.ZERO     # 잡은 지점 → 덩어리 중심 (수평)
 
 var overlay: Control
 var tray: VBoxContainer
@@ -41,7 +42,6 @@ var hud_time: Label
 var hud_count: Label
 var hud_card: Label
 var hud_sel: Label
-var ticket_btn: Button
 var spin_btn: Button
 var warn: Label
 var warn_t := 0.0
@@ -181,8 +181,6 @@ func _build_hud() -> void:
 	tools.add_child(UI.button("↺ 45° (Q)", func(): _turn(-PI / 4), 18))
 	tools.add_child(UI.button("↻ 45° (E)", func(): _turn(PI / 4), 18))
 	tools.add_child(UI.button("똑바로 (T)", _straighten, 18))
-	tools.add_child(UI.button("거울 복제 (X)", func(): _duplicate(true), 18))
-	tools.add_child(UI.button("복제", func(): _duplicate(false), 18))
 	tools.add_child(UI.button("내리기 (Del)", _delete, 18))
 	tools.add_child(UI.button("되돌리기", _undo, 18))
 	spin_btn = UI.button("돌려보기", func(): spin = not spin, 18)
@@ -197,9 +195,7 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("끌기: 덩어리 = 옮기기 · 빈 곳 = 시점 · 손잡이 = 크기/회전 · 휠 = 줌\nCtrl+Z 되돌리기 · F 덩어리로 시점 이동 · 우클릭 끌기 = 시점", 17, UI.SOFT))
-	ticket_btn = UI.button("", _use_ticket, 20)
-	bv.add_child(ticket_btn)
+	bv.add_child(UI.label("끌기: 덩어리 = 옮겨서 위에 얹기 · Shift+끌기 = 높이 · 손잡이 = 크기/회전\n빈 곳·우클릭 끌기 = 시점 · 휠 = 줌 · Ctrl+Z 되돌리기 · F 덩어리로 시점 이동", 17, UI.SOFT))
 	bv.add_child(UI.button("다 했다 →", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
@@ -332,37 +328,6 @@ func _surface_point_above(p: Piece, xz: Vector3) -> Vector3:
 	return Vector3(xz.x, y + p.world_half_extents().y, xz.z)
 
 
-func _free_index_like(it: Dictionary) -> int:
-	var used := {}
-	for c in work_root.get_children():
-		used[(c as Piece).inv_index] = true
-	for i in inventory.size():
-		if not used.has(i) and inventory[i]["type"] == it["type"] and (inventory[i]["shape"] as Vector3).is_equal_approx(it["shape"]):
-			return i
-	return -1
-
-
-func _duplicate(mirror: bool) -> void:
-	if not selected:
-		_warn("먼저 덩어리를 고르세요")
-		return
-	var idx := _free_index_like({"type": selected.type, "shape": selected.shape})
-	if idx < 0:
-		_warn("똑같은 덩어리(%s)가 더 없어요" % Data.variant_name(selected.type, selected.shape))
-		return
-	var d := selected.to_dict()
-	d["c"] = selected.color_idx
-	if mirror:
-		var b := Basis(d["r"] as Quaternion)
-		var m := Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1))
-		d["r"] = (m * b * m).get_rotation_quaternion()
-		var pos: Vector3 = d["p"]
-		d["p"] = Vector3(-pos.x if absf(pos.x) > 0.05 else pos.x + 0.4, pos.y, pos.z)
-	else:
-		d["p"] = d["p"] + Vector3(0.3, 0, 0.3)
-	_spawn(idx, d)
-
-
 func _delete() -> void:
 	if not selected:
 		return
@@ -409,15 +374,6 @@ func _select(p: Piece) -> void:
 	if p:
 		p.set_highlight(true)
 
-
-func _use_ticket() -> void:
-	if Game.tickets < 1:
-		_warn("티켓이 없어요 — 카드를 달성하면 생겨요")
-		return
-	Game.tickets -= 1
-	time_left += 30
-	warn.text = "+30초!"
-	warn_t = 1.5
 
 
 # ── 입력 ─────────────────────────────────────────────
@@ -468,29 +424,39 @@ func _ray_piece(mouse: Vector2) -> Dictionary:
 	return get_world_3d().direct_space_state.intersect_ray(q)
 
 
+## 끌기: 커서가 가리키는 곳(책상이나 다른 덩어리 윗면) 위에 얹는다. 옆면에 붙지 않는다.
+## 잡은 지점을 유지해서, 잡는 순간 덩어리가 커서로 튀지 않는다.
 func _snap_target(mouse: Vector2) -> Vector3:
+	var cur: Vector3 = anim.get(selected, selected.position)
 	var from := cam.project_ray_origin(mouse)
 	var dir := cam.project_ray_normal(mouse)
+	var space := get_world_3d().direct_space_state
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 50, 0b11)
 	q.exclude = [selected.body.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	var h := selected.world_half_extents()
-	var pos: Vector3
+	var hit := space.intersect_ray(q)
+	var p: Vector3
 	if hit:
-		var n: Vector3 = hit["normal"]
-		var ext := absf(n.x) * h.x + absf(n.y) * h.y + absf(n.z) * h.z
-		pos = hit["position"] + n * ext
+		p = hit["position"]
 	else:
 		if absf(dir.y) < 0.001:
-			return anim.get(selected, selected.position)
+			return cur
 		var t := -from.y / dir.y
 		if t < 0:
-			return anim.get(selected, selected.position)
-		pos = from + dir * t + Vector3(0, h.y, 0)
-	pos.x = clampf(pos.x, -TABLE, TABLE)
-	pos.z = clampf(pos.z, -TABLE, TABLE)
-	pos.y = maxf(pos.y, h.y * 0.3)
-	return pos
+			return cur
+		p = from + dir * t
+	var xz := Vector3(p.x, 0, p.z) + grab_off
+	xz.x = clampf(xz.x, -TABLE, TABLE)
+	xz.z = clampf(xz.z, -TABLE, TABLE)
+	# 그 자리 바로 아래 가장 높은 면 위에 얹는다
+	var h := selected.world_half_extents()
+	var top := 0.0
+	for off in [Vector3.ZERO, Vector3(h.x * 0.6, 0, 0), Vector3(-h.x * 0.6, 0, 0), Vector3(0, 0, h.z * 0.6), Vector3(0, 0, -h.z * 0.6)]:
+		var dq := PhysicsRayQueryParameters3D.create(xz + off + Vector3(0, 8, 0), xz + off + Vector3(0, -1, 0), 0b11)
+		dq.exclude = [selected.body.get_rid()]
+		var dh := space.intersect_ray(dq)
+		if dh:
+			top = maxf(top, dh["position"].y)
+	return Vector3(xz.x, top + h.y, xz.z)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -532,7 +498,13 @@ func _input(event: InputEvent) -> void:
 				if not pushed:
 					_push_undo()
 					pushed = true
-				anim[selected] = _snap_target(mm.position)
+				if Input.is_key_pressed(KEY_SHIFT):
+					# 높이만: 띄우거나 파묻기
+					var cur: Vector3 = anim.get(selected, selected.position)
+					cur.y = clampf(cur.y - mm.relative.y * dist * 0.0022, -0.2, 3.5)
+					anim[selected] = cur
+				else:
+					anim[selected] = _snap_target(mm.position)
 			"size":
 				var k := _knobs()
 				if not k.is_empty():
@@ -576,6 +548,8 @@ func _press(pos: Vector2) -> void:
 		_select(p)
 		mode = "move"
 		pushed = false
+		var hp: Vector3 = hit["position"]
+		grab_off = Vector3(p.global_position.x - hp.x, 0, p.global_position.z - hp.z)
 	else:
 		mode = "orbit?"
 
@@ -586,9 +560,6 @@ func _key(k: InputEventKey) -> void:
 		KEY_Q: _turn(-PI / 4)
 		KEY_E: _turn(PI / 4)
 		KEY_T: _straighten()
-		KEY_X: _duplicate(true)
-		KEY_D:
-			if ctrl: _duplicate(false)
 		KEY_Z:
 			if ctrl:
 				if k.shift_pressed: _redo()
@@ -641,8 +612,6 @@ func _process(delta: float) -> void:
 	var ok := Judge.card_constraint(card, dicts, inventory.size())
 	hud_card.text = ("제약 충족 — 이제 %s만 남았어요" % Data.rank_text(card["rank"])) if ok else "제약 아직 (최소 %d개 + 카드 조건)" % MIN_PIECES
 	hud_card.add_theme_color_override("font_color", UI.GOOD if ok else UI.SOFT)
-	ticket_btn.text = "+30초 (티켓 %d장)" % Game.tickets
-	ticket_btn.disabled = Game.tickets < 1
 	spin_btn.text = "멈추기" if spin else "돌려보기"
 	if selected:
 		hud_sel.text = "%s · 크기 %.1f배\n색 %s" % [Data.variant_name(selected.type, selected.shape), selected.size, Data.palette()[selected.color_idx]["name"]]

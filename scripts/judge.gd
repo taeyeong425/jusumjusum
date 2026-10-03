@@ -166,9 +166,14 @@ static func perceived(score: float) -> float:
 	return clampf((score - 0.25) / 0.57, 0.0, 1.0)
 
 
-static func bot_star(score: float, bias: float, rng: RandomNumberGenerator) -> int:
+## 평가는 0.0 ~ 5.0, 0.1 단위
+const TOP := 4.6        # 이 점수 이상은 평가자 1명당 한 작품만
+const TOP_CAP := 4.5
+
+
+static func bot_star(score: float, bias: float, rng: RandomNumberGenerator) -> float:
 	var v := 1.0 + 4.0 * clampf(perceived(score) + bias + rng.randfn(0.0, 0.08), 0.0, 1.0)
-	return clampi(roundi(v), 1, 5)
+	return snappedf(clampf(v + rng.randfn(0.0, 0.15), 0.0, 5.0), 0.1)
 
 
 ## 평가 매트릭스: ratings[rater][work] (자기 작품은 -1).
@@ -191,35 +196,35 @@ static func rate_round(players: Array, tpl: Dictionary, human_ratings: Dictionar
 					continue
 				raw[w] = scores[w] + players[r]["bias"] + rng.randfn(0.0, 0.07)
 				row[w] = bot_star(scores[w], players[r]["bias"], rng)
-			_enforce_one_five(row, raw)
+			_enforce_one_top(row, raw)
 		else:
 			for w in n:
 				if w != r:
-					row[w] = int(human_ratings.get(w, 3))
+					row[w] = float(human_ratings.get(w, 3.0))
 		ratings.append(row)
 	var avg := []
 	for w in n:
 		var s := 0.0
 		var c := 0
 		for r in n:
-			if ratings[r][w] > 0:
+			if ratings[r][w] >= 0:
 				s += ratings[r][w]
 				c += 1
 		avg.append(s / maxf(1.0, float(c)))
 	return {"ratings": ratings, "avg": avg, "scores": scores}
 
 
-## 평가자당 ★5는 1개만. 여러 개면 가장 높게 본 작품만 남기고 나머지는 ★4.
-static func _enforce_one_five(row: Array, raw: Dictionary) -> void:
-	var fives := []
+## 4.6 이상은 평가자당 한 작품만. 여러 개면 가장 높게 본 작품만 남기고 나머지는 4.5로.
+static func _enforce_one_top(row: Array, raw: Dictionary) -> void:
+	var tops := []
 	for w in row.size():
-		if row[w] == 5:
-			fives.append(w)
-	if fives.size() <= 1:
+		if row[w] >= TOP - 0.001:
+			tops.append(w)
+	if tops.size() <= 1:
 		return
-	fives.sort_custom(func(a, b): return raw.get(a, 0.0) > raw.get(b, 0.0))
-	for i in range(1, fives.size()):
-		row[fives[i]] = 4
+	tops.sort_custom(func(a, b): return raw.get(a, 0.0) > raw.get(b, 0.0))
+	for i in range(1, tops.size()):
+		row[tops[i]] = TOP_CAP
 
 
 ## 동점 규칙: 기준값 이상이면 통과 (격자 위의 값이라 경계가 명확하다)
@@ -371,7 +376,7 @@ static func _unique_types(players: Array, idx: int) -> int:
 static func _spread(ratings: Array, idx: int) -> float:
 	var vals := []
 	for r in ratings.size():
-		if ratings[r][idx] > 0:
+		if ratings[r][idx] >= 0:
 			vals.append(float(ratings[r][idx]))
 	if vals.size() < 2:
 		return 0.0
