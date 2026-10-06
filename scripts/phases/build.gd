@@ -153,6 +153,25 @@ func _build_room() -> void:
 	_cy(Vector3(3.6, -0.55, 3.2), 0.25, 0.7, Color("#6E5743"))
 	_rb(Vector3(3.6, -0.18, 3.2), Vector3(0.6, 0.06, 0.6), Color("#8A6A47"), 0.02)
 	_rb(Vector3(0, -0.895, 0), Vector3(7.0, 0.01, 7.0), Color("#D8D1C4"), 0.0)
+	# 참고 모형: 만들 물건의 작은 견본 (뒤쪽 작은 좌대 위, 천천히 돈다)
+	_rb(Vector3(-2.9, -0.45, -2.9), Vector3(0.9, 0.9, 0.9), Color("#F3F0EA"), 0.02)
+	var inv := []
+	for t in Data.TYPES:
+		for v in Data.VARIANTS[t]:
+			inv.append(Data.make_item(t, v[1], 0, "auto"))
+	var model := Node3D.new()
+	model.position = Vector3(-2.9, 0.05, -2.9)
+	model.scale = Vector3.ONE * 0.65
+	add_child(model)
+	var mrng := RandomNumberGenerator.new()
+	mrng.seed = 7
+	for d in BotBuilder.build(Game.target, inv, 1.0, mrng):
+		model.add_child(Piece.from_dict(d, false))
+	var mtw := create_tween().set_loops()
+	mtw.tween_property(model, "rotation:y", TAU, 9.0).from(0.0)
+	var ml := UI.label3d("참고 모형", 22, Color("#5A4636"))
+	ml.position = Vector3(-2.9, 1.15, -2.9)
+	add_child(ml)
 	# 스포트라이트 둘 (따뜻한 빛, 받침대에 그림자)
 	for sp in [[Vector3(3.5, 5.0, 3.0), Color("#FFE9C8")], [Vector3(-3.0, 5.0, 2.0), Color("#FFF4E6")]]:
 		var l := SpotLight3D.new()
