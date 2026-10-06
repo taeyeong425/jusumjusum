@@ -136,7 +136,7 @@ func _indoor_env() -> void:
 		if c is WorldEnvironment:
 			var env: Environment = (c as WorldEnvironment).environment
 			env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-			env.tonemap_exposure = 1.05
+			env.tonemap_exposure = 0.95
 			env.ambient_light_color = Color("#FFF0DC")
 			env.ambient_light_energy = 0.5
 			env.fog_enabled = true
@@ -144,7 +144,7 @@ func _indoor_env() -> void:
 			env.fog_density = 0.0035
 			env.fog_sky_affect = 0.0
 		if c is DirectionalLight3D:
-			(c as DirectionalLight3D).light_energy = 0.85
+			(c as DirectionalLight3D).light_energy = 0.6
 			(c as DirectionalLight3D).directional_shadow_max_distance = 30.0
 
 
@@ -1011,6 +1011,7 @@ func _spawn_actors() -> void:
 		var sp: Vector3 = spots_s[i % spots_s.size()]
 		body.position = sp + Vector3(Game.rng.randf_range(-0.6, 0.6), 0.2, Game.rng.randf_range(-0.6, 0.6))
 		world.add_child(body)
+		body.set_meta("label", name_l)
 		actors.append({"i": i, "body": body, "vis": vis, "bot": p["is_bot"] or Game.autotest,
 			"goal": {}, "prog": 0.0, "wait": Game.rng.randf_range(0.0, 1.0), "walk_t": 0.0,
 			"spawn": sp})
@@ -1610,10 +1611,10 @@ func _build_hud() -> void:
 	tipv.add_child(UI.label(Themes.INFO[Game.theme]["desc"], 18, UI.SOFT))
 	tipv.add_child(UI.label("마우스 = 둘러보기 · 조준해서 [F] = 줍기 / 열기 · [Tab] = 근처 목록\nWASD 이동 · Space 점프 (의자 → 책상처럼 가구를 밟고 오르기) · 공은 차면 날아가요\n매트 · 상자는 밀 수 있어요 — 밑에 쪽지가 깔려 있을지도!", 18, UI.INK))
 	layer.add_child(tip)
-	UI.corner(tip, Control.PRESET_CENTER, Vector2(0, -60))
+	UI.corner(tip, Control.PRESET_CENTER_TOP, Vector2(0, 16))
 	tip.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	var ttw := create_tween()
-	ttw.tween_interval(7.0)
+	ttw.tween_interval(6.0)
 	ttw.tween_property(tip, "modulate:a", 0.0, 0.8)
 	ttw.tween_callback(tip.queue_free)
 	_refresh_hotbar()
@@ -1656,6 +1657,12 @@ func _draw_slot(cell: Control, idx: int) -> void:
 
 
 func _update_hud(delta: float) -> void:
+	# 봇 이름표에 찾은 봉투 수 (경쟁감)
+	if Engine.get_physics_frames() % 20 == 0:
+		for a in actors:
+			if a["i"] != 0:
+				var lb: Label3D = (a["body"] as Node).get_meta("label")
+				lb.text = "%s · 봉투 %d" % [Game.players[a["i"]]["name"], _envs(a).size()]
 	for w in [30, 10, 5, 4, 3, 2, 1]:
 		if time_left <= w and not warned.has(w):
 			warned[w] = true
