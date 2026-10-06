@@ -228,6 +228,8 @@ static func _cabin(h) -> void:
 	h.spot(Vector3(-15.6, DECK_Y + 0.73, 4.0), "open")
 	Props.cabinet(h, Vector3(-13.0, DECK_Y, -5.0), 0.0, 12, 13, "옷장")
 	Props.lamp(h, Vector3(-13.5, QD_Y - 0.4, 0.0), Color("#FFC27A"), 1.6, 7.0)
+	h.box(Vector3(-16.85, DECK_Y + 1.6, 1.5), Vector3(0.02, 0.9, 1.3), Color("#E8D2A0"), PI / 2, false, 0.0)
+	h.box(Vector3(-16.83, DECK_Y + 1.6, 1.5), Vector3(0.02, 0.5, 0.5), Color("#8A5A3B"), PI / 2, false, 0.0)
 	h.lv(0)
 
 

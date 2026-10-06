@@ -129,6 +129,10 @@ static func _frames_on(h, a: Vector2, b: Vector2, yaw: float, n: int, cols: Arra
 		var p := a.lerp(b, t)
 		var w := 1.0 + (k % 3) * 0.3
 		Props.frame(h, Vector3(p.x, 1.65 + (k % 2) * 0.15, p.y), yaw, Vector2(w, w * 0.75), [4, 12, 15][k % 3], cols[k % cols.size()])
+		# 작품 이름표
+		var fwd := Vector3(sin(yaw), 0, cos(yaw))
+		var rt := Vector3(cos(yaw), 0, -sin(yaw))
+		h.box(Vector3(p.x, 0.62, p.y) + rt * (w * 0.5 + 0.25) + fwd * 0.02, Vector3(0.22, 0.14, 0.015), Color("#F4F1EA"), yaw, false, 0.0)
 
 
 static func _gallery_a(h) -> void:

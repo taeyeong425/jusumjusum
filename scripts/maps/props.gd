@@ -28,6 +28,8 @@ static func desk(h, p: Vector3, yaw: float, top_c, leg_c, drawer_c: int, spot_on
 		p + Vector3(0, 0.69, 0) + f * 0.48, "책상 서랍")
 	if spot_on_top:
 		h.spot(p + Vector3(0, 0.78, 0) + r * 0.25, "open")
+	else:
+		clutter(h, p + Vector3(0, 0.77, 0), Game.rng)
 	if chair:
 		var cp := p + f * 0.75
 		h.box(cp + Vector3(0, 0.44, 0), Vector3(0.45, 0.05, 0.42), top_c, yaw, false, 0.02)
@@ -295,3 +297,25 @@ static func lamp(h, p: Vector3, col := Color("#FFD9A0"), energy := 1.6, rng_ := 
 	l.omni_range = rng_ * h.W
 	h.lvl_roots[h.lvl].add_child(l)
 	h.end_obj()
+
+
+## 책상 위 잔짐 (공책 · 연필 · 책 더미 · 컵) — 무작위로 조금씩
+static func clutter(h, top: Vector3, rng: RandomNumberGenerator) -> void:
+	var r := rng.randf()
+	if r < 0.35:
+		h.box_rot(top + Vector3(rng.randf_range(-0.3, 0.1), 0.012, rng.randf_range(-0.12, 0.12)), Vector3(0.24, 0.02, 0.32), [Color("#3E6B9A"), Color("#C94A4A"), Color("#5E9A5E")][rng.randi() % 3], Vector3(0, rng.randf_range(-30, 30), 0))
+		h.box_rot(top + Vector3(rng.randf_range(0.1, 0.35), 0.012, rng.randf_range(-0.1, 0.1)), Vector3(0.18, 0.012, 0.012), Color("#E9C46A"), Vector3(0, rng.randf_range(0, 180), 0))
+	elif r < 0.55:
+		for k in rng.randi_range(2, 3):
+			h.box_rot(top + Vector3(0.25, 0.03 + k * 0.045, 0.0), Vector3(0.26, 0.04, 0.34), [Color("#8E3B3B"), Color("#2F4A62"), Color("#6A7F3A"), Color("#B5763C")][k % 4], Vector3(0, rng.randf_range(-15, 15), 0))
+	elif r < 0.7:
+		h.cyl(top + Vector3(rng.randf_range(-0.3, 0.3), 0.06, 0.1), 0.045, 0.12, [Color("#F4F1EA"), Color("#E2553D"), Color("#3E6B9A")][rng.randi() % 3], false, 10, 0.3)
+
+
+## 벽 포스터 (그림 · 시간표 · 지도) — 장식
+static func poster(h, p: Vector3, yaw: float, size: Vector2, base, rng: RandomNumberGenerator) -> void:
+	var f := _fwd(yaw)
+	h.box(p + f * 0.012, Vector3(size.x, size.y, 0.01), base, yaw, false, 0.0)
+	for k in 3:
+		var off := Vector3(rng.randf_range(-0.3, 0.3) * size.x, rng.randf_range(-0.3, 0.3) * size.y, 0)
+		h.box(p + f * 0.02 + Basis(Vector3.UP, yaw) * off, Vector3(size.x * rng.randf_range(0.15, 0.4), size.y * rng.randf_range(0.08, 0.25), 0.01), [Color("#E2553D"), Color("#3E6B9A"), Color("#E9C46A"), Color("#5E9A5E")][rng.randi() % 4], yaw, false, 0.0)

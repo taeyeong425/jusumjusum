@@ -165,6 +165,9 @@ static func _classroom(h, x0: float, rng: RandomNumberGenerator) -> void:
 	for wx in [-5.0, 5.2]:
 		h.box(Vector3(cx + wx, 1.9, -11.88), Vector3(1.6, 1.2, 0.05), Color("#BFE0F0"), 0.0, false, 0.02)
 	Props.plant(h, Vector3(x0 + 13.3, 0, -11.2))
+	Props.poster(h, Vector3(x0 + 0.13, 1.6, -4.0), PI / 2, Vector2(1.0, 1.3), Color("#F4F1EA"), rng)
+	Props.poster(h, Vector3(x0 + 13.87, 1.6, -8.0), -PI / 2, Vector2(1.4, 1.0), Color("#FFF6D8"), rng)
+	Props.poster(h, Vector3(x0 + 10.0, 1.5, -2.13), PI, Vector2(1.6, 0.9), Color("#E8F1F7"), rng)
 	h.spot(Vector3(x0 + 0.6, 0.02, -2.6), "open")
 	h.spot(Vector3(x0 + 13.4, 0.02, -4.0), "open")
 
@@ -211,6 +214,8 @@ static func _hall(h) -> void:
 	h.cyl(Vector3(-19.5, 0.35, 1.6), 0.13, 0.7, 2, true, 10)
 	Props.frame(h, Vector3(9.0, 1.8, 1.86), PI, Vector2(1.4, 0.9), 12, 4, "게시판")
 	h.spot(Vector3(-10.5, 0.02, 1.4), "open")
+	for px in [-17.5, -6.5, 17.5]:
+		Props.poster(h, Vector3(px, 1.6, 1.87), PI, Vector2(1.2, 0.9), Color("#FFF6D8"), Game.rng)
 	h.toy_ball(Vector3(-8.0, 0, 0.0), 0.11, 2)
 	h.toy_ball(Vector3(15.0, 0, 0.3), 0.11, 8)
 	h.spot(Vector3(17.5, 0.02, 1.4), "open")
@@ -390,4 +395,7 @@ static func _second_floor(h) -> void:
 	Props.bench(h, Vector3(-6.0, F2, 1.55), PI, Color("#C9A27A"), Color("#5E6B78"))
 	h.cyl(Vector3(16.0, F2 + 0.5, 1.6), 0.25, 1.0, 0, true, 12)
 	h.spot(Vector3(12.5, F2 + 0.02, 1.4), "open")
+	for px in [-17.0, -2.0, 18.0]:
+		Props.poster(h, Vector3(px, F2 + 1.6, 1.87), PI, Vector2(1.2, 0.9), Color("#E8F1F7"), Game.rng)
+	Props.poster(h, Vector3(-19.87, F2 + 1.6, -9.0), PI / 2, Vector2(1.6, 1.1), Color("#F4F1EA"), Game.rng)
 	h.lv(0)

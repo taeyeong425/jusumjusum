@@ -81,6 +81,7 @@ func _ready() -> void:
 	time_left = Game.t_collect()
 	var th: Dictionary = Themes.INFO[Game.theme]
 	UI.make_env(self, Color(th["sky"]))
+	_indoor_env()
 	world = Node3D.new()
 	add_child(world)
 	for k in LVL_LAYERS.size():
@@ -126,6 +127,24 @@ func _scale_info() -> void:
 	for y in info["levels"]:
 		lv_s.append(float(y) * W)
 	info["levels"] = lv_s
+
+
+## 실내 분위기: 은은한 거리 안개(깊이감) · 따뜻한 주변광 · 필름 톤
+func _indoor_env() -> void:
+	for c in get_children():
+		if c is WorldEnvironment:
+			var env: Environment = (c as WorldEnvironment).environment
+			env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+			env.tonemap_exposure = 1.05
+			env.ambient_light_color = Color("#FFF0DC")
+			env.ambient_light_energy = 0.5
+			env.fog_enabled = true
+			env.fog_light_color = Color("#E9E2D6")
+			env.fog_density = 0.0035
+			env.fog_sky_affect = 0.0
+		if c is DirectionalLight3D:
+			(c as DirectionalLight3D).light_energy = 0.85
+			(c as DirectionalLight3D).directional_shadow_max_distance = 30.0
 
 
 func _exit_tree() -> void:

@@ -16,6 +16,13 @@ global uniform float seethru_on;
 varying vec3 wpos;
 varying vec3 wnorm;
 
+float hsh(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float vnoise(vec3 p) {
+	vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hsh(i), hsh(i + vec3(1,0,0)), f.x), mix(hsh(i + vec3(0,1,0)), hsh(i + vec3(1,1,0)), f.x), f.y),
+		mix(mix(hsh(i + vec3(0,0,1)), hsh(i + vec3(1,0,1)), f.x), mix(hsh(i + vec3(0,1,1)), hsh(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnorm = normalize(mat3(MODEL_MATRIX) * NORMAL);
@@ -61,8 +68,11 @@ void fragment() {
 		col = mix(col, col * 0.8, rim * fade);
 		col = mix(col, col + vec3(0.12), hi * 0.6 * fade);
 	}
+	// 실사 느낌: 표면의 미세한 얼룩 · 결 (페인트 · 플라스틱이 완전 단색이 아니게)
+	float nz = vnoise(wpos * 1.7) * 0.6 + vnoise(wpos * 7.0) * 0.4;
+	col *= 0.93 + 0.1 * nz;
 	ALBEDO = col;
-	ROUGHNESS = gloss;
+	ROUGHNESS = gloss + (nz - 0.5) * 0.15;
 	SPECULAR = 0.6;
 	EMISSION = emission;
 }
