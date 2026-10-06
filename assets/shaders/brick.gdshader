@@ -39,8 +39,8 @@ void fragment() {
 		float aspect = VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
 		vec2 dd = (fp.xy / fp.w - pp.xy / pp.w) * vec2(aspect, 1.0);
 		float r = length(dd);
-		if (-VERTEX.z < -pv.z - 0.8) {
-			float edge = smoothstep(0.3, 0.44, r);
+		if (-VERTEX.z < -pv.z - 1.2) {
+			float edge = smoothstep(0.16, 0.26, r);
 			float n = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
 			if (n > edge) {
 				discard;

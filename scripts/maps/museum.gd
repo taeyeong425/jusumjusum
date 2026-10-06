@@ -14,9 +14,9 @@ static func build(h) -> Dictionary:
 	h.set_world_scale(2.0)   # v0.6.2: 캐릭터 대비 2배 — 작은 관람객
 	const HH := 7.0          # 조각 홀 높이 (2층 발코니 위로 트인 천장)
 	h.floor_rect(Rect2(-7, -13, 14, 26), 0.0, 2, Color("#EFEBE4"), Color("#D6CFC4"), 0.4)          # 조각 홀 (대리석)
-	h.floor_rect(Rect2(-20, -13, 13, 13), 0.0, 0, Color("#8B5E3C"), Color("#7A5134"), 0.5)         # 전시실 A
-	h.floor_rect(Rect2(-20, 0, 13, 13), 0.0, 0, Color("#9A6A44"), Color("#86593A"), 0.5)           # 전시실 B
-	h.floor_rect(Rect2(7, -13, 13, 15), 0.0, 0, Color("#8B5E3C"), Color("#7A5134"), 0.5)           # 전시실 C
+	h.floor_rect(Rect2(-20, -13, 13, 13), 0.0, 0, Color("#7A6250"), Color("#6A5444"), 0.5)         # 전시실 A
+	h.floor_rect(Rect2(-20, 0, 13, 13), 0.0, 0, Color("#80695A"), Color("#6E5A4C"), 0.5)           # 전시실 B
+	h.floor_rect(Rect2(7, -13, 13, 15), 0.0, 0, Color("#7A6250"), Color("#6A5444"), 0.5)           # 전시실 C
 	h.floor_rect(Rect2(7, 2, 13, 11), 0.0, 1, Color("#B4B8BC"), Color("#A5A9AD"), 0.8)             # 창고
 	h.ceiling(Rect2(-7, -13, 14, 26), HH, Color("#F4F1EA"))
 	h.ceiling(Rect2(-20, -13, 13, 26), H, Color("#F4F1EA"))

@@ -77,17 +77,17 @@ static func locker(h, p: Vector3, yaw: float, c: int, door_c: int) -> void:
 		p + Vector3(0, 1.13, 0), "사물함")
 	# 문 손잡이 · 환기구 (문과 같이 움직이게 판 자식으로)
 	var pc: Piece = e["node"]
-	var knob := MeshInstance3D.new()
-	knob.mesh = h._rbox_mesh(Vector3(0.03, 0.14, 0.03), 0.01)
-	knob.material_override = Data.material(14)
-	knob.position = Vector3(w * 0.36, 0, 0.03)
-	pc.add_child(knob)
+	# 손잡이 + 환기구 3줄을 한 메시로 (그리기 호출 절약)
+	var W: float = h.W
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.append_from(h._plain_box(Vector3(0.03, 0.14, 0.03) * W), 0, Transform3D(Basis(), Vector3(w * 0.36, 0, 0.03) * W))
 	for k in 3:
-		var vent := MeshInstance3D.new()
-		vent.mesh = h._rbox_mesh(Vector3(0.36, 0.025, 0.01), 0.005)
-		vent.material_override = Data.material(15)
-		vent.position = Vector3(0, 0.62 - k * 0.07, 0.02)
-		pc.add_child(vent)
+		st.append_from(h._plain_box(Vector3(0.36, 0.025, 0.01) * W), 0, Transform3D(Basis(), Vector3(0, 0.62 - k * 0.07, 0.02) * W))
+	var deco := MeshInstance3D.new()
+	deco.mesh = st.commit()
+	deco.material_override = Data.brick(Color("#2B2F33"), false, 0.25, 0.5)
+	pc.add_child(deco)
 
 
 ## 책장: 칸마다 책 줄 + 빈자리(보물 자리). top_high = 맨 위 칸은 "높은 곳"
@@ -188,27 +188,27 @@ static func chest(h, p: Vector3, yaw: float, name := "보물상자") -> void:
 	h.container("lid", p + Vector3(0, 0.56, 0), Vector3(0.92, 0.12, 0.57), yaw, 12, p + Vector3(0, 0.56, 0), name)
 
 
-## 액자 (벽에 붙음, 아래가 앞으로 들린다 — 뒤에 쪽지)
-	h.end_obj()
-
-
+## 액자 (벽에 붙음, 아래가 앞으로 들린다 — 뒤에 쪽지). 그림 = 흰 여백 + 하늘 · 땅 · 산 · 해
 static func frame(h, p: Vector3, yaw: float, size: Vector2, frame_c: int, art_c: int, name := "액자") -> void:
 	p.y = minf(p.y, 1.05)   # 작은 캐릭터 손이 닿게
-	h.obj(p)
 	var f := _fwd(yaw)
 	var e: Dictionary = h.container("frame", p + f * 0.04, Vector3(size.x, size.y, 0.05), yaw, frame_c, p + f * 0.06 - Vector3(0, size.y * 0.3, 0), name)
 	var pc: Piece = e["node"]
-	var art := MeshInstance3D.new()
-	art.mesh = h._rbox_mesh(Vector3(size.x * 0.82, size.y * 0.78, 0.01), 0.0)
-	art.material_override = Data.material(art_c)
-	art.position = Vector3(0, 0, 0.03)
-	pc.add_child(art)
-	# 그림 속 무늬 (해 · 산)
-	var sun := MeshInstance3D.new()
-	sun.mesh = h._rbox_mesh(Vector3(size.x * 0.18, size.x * 0.18, 0.012), size.x * 0.08)
-	sun.material_override = Data.material(4)
-	sun.position = Vector3(size.x * 0.2, size.y * 0.18, 0.04)
-	pc.add_child(sun)
+	var W: float = h.W
+	var lay := func(pos: Vector2, sz: Vector2, col: Color, z: float) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = h._rbox_mesh(Vector3(sz.x * W, sz.y * W, 0.006 * W), 0.0)
+		mi.material_override = Data.brick(col, false, 0.25, 0.8)
+		mi.position = Vector3(pos.x * W, pos.y * W, z * W)
+		pc.add_child(mi)
+	var sky := Data.color(art_c).lerp(Color("#DDEFF8"), 0.5)
+	var ground := Data.color(art_c).darkened(0.3)
+	lay.call(Vector2.ZERO, size * 0.86, Color("#F4F1EA"), 0.028)
+	lay.call(Vector2(0, size.y * 0.1), Vector2(size.x * 0.74, size.y * 0.5), sky, 0.032)
+	lay.call(Vector2(0, -size.y * 0.22), Vector2(size.x * 0.74, size.y * 0.2), ground, 0.034)
+	lay.call(Vector2(-size.x * 0.12, -size.y * 0.04), Vector2(size.x * 0.32, size.y * 0.22), Data.color(art_c).darkened(0.1), 0.036)
+	lay.call(Vector2(size.x * 0.22, size.y * 0.22), Vector2(size.x * 0.1, size.x * 0.1), Color("#F2C94C"), 0.038)
+
 
 
 ## 받침대 + 서랍 (미술관 조각 받침)

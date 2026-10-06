@@ -95,6 +95,7 @@ func _ready() -> void:
 	_scale_info()
 	for k in batches.size():
 		_commit(batches[k], lvl_roots[k])
+	_commit_glow()
 	_spawn_actors()
 	_build_camera()
 	await _build_nav()
@@ -157,6 +158,7 @@ func _exit_tree() -> void:
 # 책상 위 · 책장 칸 · 배 난간처럼 가구가 곧 지형이 된다 — 의자 → 책상 → 선반으로 오르는 3D 탐색.
 
 var W := 1.0
+var glow_batches: Array = []   # 층별 [형광등 SurfaceTool, 유리 SurfaceTool]
 var walls: Array = []
 var _wall_mats := {}
 const L_FURN := 256            # 가구 충돌: 캐릭터는 막고 카메라는 통과 (가구에 카메라가 끌려 들어오지 않게)
@@ -385,12 +387,7 @@ func ceiling(rect: Rect2, y: float, c: Color, lights := true) -> void:
 		for ix in nx:
 			for iz in nz:
 				var lp := Vector3(rect.position.x + rect.size.x * (ix + 0.5) / nx, y - 0.03, rect.position.y + rect.size.y * (iz + 0.5) / nz)
-				var l := MeshInstance3D.new()
-				l.mesh = _rbox_mesh(Vector3(1.2 * W, 0.04 * W, 0.3 * W), 0.0)
-				l.material_override = lm
-				l.position = lp
-				l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				lvl_roots[lvl].add_child(l)
+				_glow(0).append_from(_rbox_mesh(Vector3(1.2 * W, 0.04 * W, 0.3 * W), 0.0), 0, Transform3D(Basis(), lp))
 
 
 ## 벽: a→b (xz, 지도 단위), y 바닥, 높이 h. gaps = [[a에서 거리, 폭], ...] (문 — 문 위에 상인방, 문틀)
@@ -453,13 +450,7 @@ func wall(a: Vector2, b: Vector2, y: float, h: float, c, thick := 0.2, gaps := [
 		var wp := a + d * wc
 		for side in [-1.0, 1.0]:
 			var off: Vector2 = n * float(side) * (thick * 0.5 + 0.015 * W)
-			var g := MeshInstance3D.new()
-			g.mesh = _plain_box(Vector3(ww, 1.3 * W, 0.01 * W))
-			g.material_override = gm2
-			g.position = Vector3(wp.x + off.x, y + 1.75 * W, wp.y + off.y)
-			g.rotation.y = yaw
-			g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			lvl_roots[lvl].add_child(g)
+			_glow(1).append_from(_plain_box(Vector3(ww, 1.3 * W, 0.01 * W)), 0, Transform3D(Basis(Vector3.UP, yaw), Vector3(wp.x + off.x, y + 1.75 * W, wp.y + off.y)))
 			for fy in [1.1, 1.75, 2.4]:
 				_box_raw(Vector3(wp.x + off.x * 1.5, y + fy * W, wp.y + off.y * 1.5), Vector3(ww + 0.1 * W, 0.06 * W, 0.04 * W), Color("#FFFFFF"), yaw, false, 0.0)
 			for fx_ in [-0.5, 0.0, 0.5]:
@@ -467,6 +458,32 @@ func wall(a: Vector2, b: Vector2, y: float, h: float, c, thick := 0.2, gaps := [
 				_box_raw(Vector3(fp.x + off.x * 1.5, y + 1.75 * W, fp.y + off.y * 1.5), Vector3(0.06 * W, 1.36 * W, 0.04 * W), Color("#FFFFFF"), yaw, false, 0.0)
 	furn = true
 	wall_mode = false
+
+
+## 빛나는 것 묶음 (0 = 형광등 · 1 = 창문 유리)
+func _glow(k: int) -> SurfaceTool:
+	while glow_batches.size() <= lvl:
+		glow_batches.append([null, null])
+	if glow_batches[lvl][k] == null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		glow_batches[lvl][k] = st
+	return glow_batches[lvl][k]
+
+
+func _commit_glow() -> void:
+	for k in glow_batches.size():
+		for j in 2:
+			if glow_batches[k][j] == null:
+				continue
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.albedo_color = Color("#FFFBEF") if j == 0 else Color("#CFEAF7")
+			var mi := MeshInstance3D.new()
+			mi.mesh = (glow_batches[k][j] as SurfaceTool).commit()
+			mi.material_override = m
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			lvl_roots[k].add_child(mi)
 
 
 ## (v0.6.2: 벽 접기 대신 카메라가 벽에 부딪혀 앞으로 온다 — 실내 3인칭)
@@ -642,11 +659,6 @@ func _treasure_node(tier: String) -> Piece:
 		fold.position = Vector3(0, top + 0.03, -d * 0.5)
 		fold.rotation.x = 0.35
 		pc.add_child(fold)
-		var ink := MeshInstance3D.new()
-		ink.mesh = _rbox_mesh(Vector3(w * 1.2, 0.004, 0.012), 0.0)
-		ink.material_override = Data.flat_material(Color("#7A8A99"))
-		ink.position = Vector3(0, top, d * 0.35)
-		pc.add_child(ink)
 	else:
 		# 봉투 덮개(삼각) + 밀랍 도장
 		var flap := MeshInstance3D.new()
@@ -655,13 +667,6 @@ func _treasure_node(tier: String) -> Piece:
 		(flap.material_override as ShaderMaterial).set_shader_parameter("albedo", Data.color(col).darkened(0.18))
 		flap.position = Vector3(0, top + 0.004, 0)
 		pc.add_child(flap)
-		var seal := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.045; cm.bottom_radius = 0.05; cm.height = 0.02; cm.radial_segments = 10
-		seal.mesh = cm
-		seal.material_override = Data.material(2 if tier == "env" else 9)
-		seal.position = Vector3(0, top + 0.016, d * 0.3)
-		pc.add_child(seal)
 	if tier == "gold":
 		pc.mesh_inst.material_override = Data.brick(Color("#F2C94C"), false, 0.25, 0.15)
 		_glint(pc, 1.0)
@@ -703,7 +708,7 @@ func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: 
 		pc.visible = false
 		pc.body.collision_layer = 0
 		(box_e["inside"] as Array).append(e)
-	elif tier != "gold" and Game.rng.randf() < 0.6:
+	elif tier != "gold" and Game.rng.randf() < 0.3:
 		_glint(pc, 0.35)
 	treasures.append(e)
 	return e
@@ -1074,7 +1079,10 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("land", 0.0)
 	_update_camera()
 	_update_levels(delta)
-	_update_walls(delta)   # 구멍(셰이더) 대신 가리는 벽을 접는다
+	_update_walls(delta)
+	# 큰 가구 · 조형물이 캐릭터를 가리면 그 부분만 작게 비친다 (벽은 카메라가 부딪혀서 해당 없음)
+	RenderingServer.global_shader_parameter_set("seethru_on", 1.0)
+	RenderingServer.global_shader_parameter_set("seethru_pos", (actors[0]["body"] as Node3D).global_position + Vector3(0, 0.9, 0))
 	_update_pushables(delta)
 	_update_aim()
 	_update_hud(delta)
@@ -1580,6 +1588,20 @@ func _build_hud() -> void:
 	bag_panel.visible = false
 	layer.add_child(bag_panel)
 	UI.corner(bag_panel, Control.PRESET_CENTER_LEFT, Vector2(16, 0))
+	# 시작 안내 (몇 초 뒤 사라진다)
+	var tip := UI.panel()
+	var tipv := UI.vbox(4)
+	tip.add_child(tipv)
+	tipv.add_child(UI.label("보물찾기 — %s" % Themes.INFO[Game.theme]["name"], 26, UI.INK, true))
+	tipv.add_child(UI.label(Themes.INFO[Game.theme]["desc"], 18, UI.SOFT))
+	tipv.add_child(UI.label("마우스 = 둘러보기 · 조준해서 [F] = 줍기 / 열기 · [Tab] = 근처 목록\nWASD 이동 · Space 점프 (의자 → 책상처럼 가구를 밟고 오르기) · 공은 차면 날아가요\n매트 · 상자는 밀 수 있어요 — 밑에 쪽지가 깔려 있을지도!", 18, UI.INK))
+	layer.add_child(tip)
+	UI.corner(tip, Control.PRESET_CENTER, Vector2(0, -60))
+	tip.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var ttw := create_tween()
+	ttw.tween_interval(7.0)
+	ttw.tween_property(tip, "modulate:a", 0.0, 0.8)
+	ttw.tween_callback(tip.queue_free)
 	_refresh_hotbar()
 
 
