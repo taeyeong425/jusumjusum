@@ -37,42 +37,76 @@ func _ready() -> void:
 	var x := 0.0
 	for rec in Game.history:
 		var lab := UI.label3d("%d라운드 「%s」 %s" % [rec["round"], rec["target"], "통과" if rec["pass"] else "여기까지"], 44)
-		lab.position = Vector3(x + 5.0, 3.4, -1.2)
+		lab.position = Vector3(x + rec["works"].size() * 1.3 - 1.3, 3.95, -3.3)
 		add_child(lab)
 		var top_i := Game.round_top(rec)
 		for i in rec["works"].size():
-			var px: float = x + i * 2.0
+			var px: float = x + i * 2.6
+			var top: bool = i == top_i
+			# 좌대: 대리석 몸통 + 검은 펠트 윗판 + 바닥 굽
 			var ped := MeshInstance3D.new()
-			var bm := BoxMesh.new(); bm.size = Vector3(1.6, 0.5, 1.6)
+			var bm := BoxMesh.new(); bm.size = Vector3(1.4, 0.9, 1.4)
 			ped.mesh = bm
-			ped.position = Vector3(px, 0.25, 0)
-			ped.material_override = Data.flat_material(Color("#F4C84A") if i == top_i else (Color("#FFFFFF") if i != 0 else Color("#FFF0C2")))
+			ped.position = Vector3(px, 0.45, 0)
+			ped.material_override = _gold() if top else Data.plain_material(0, false, 1)
 			add_child(ped)
+			var felt := MeshInstance3D.new()
+			var fm := BoxMesh.new(); fm.size = Vector3(1.46, 0.04, 1.46)
+			felt.mesh = fm
+			felt.position = Vector3(px, 0.92, 0)
+			felt.material_override = Data.flat_material(Color("#1E1C1B"))
+			add_child(felt)
+			var foot := MeshInstance3D.new()
+			var ftm := BoxMesh.new(); ftm.size = Vector3(1.5, 0.08, 1.5)
+			foot.mesh = ftm
+			foot.position = Vector3(px, 0.04, 0)
+			foot.material_override = Data.flat_material(Color("#2B2826"))
+			add_child(foot)
 			var sl := SpotLight3D.new()
 			sl.light_color = Color("#FFEFD6")
-			sl.light_energy = 2.6 if i == top_i else 1.6
+			sl.light_energy = 3.0 if top else 1.9
 			sl.spot_range = 7.0
-			sl.spot_angle = 18.0
+			sl.spot_angle = 17.0
 			add_child(sl)
-			sl.look_at_from_position(Vector3(px, 4.5, 2.0), Vector3(px, 0.8, 0))
-			if i == top_i:
-				_crown(Vector3(px, 2.95, 0))
-				var badge := UI.label3d("1등", 40)
-				badge.modulate = Color("#C98A00")
-				badge.position = Vector3(px, 0.25, 0.83)
-				add_child(badge)
+			sl.look_at_from_position(Vector3(px, 4.6, 1.6), Vector3(px, 1.2, 0))
+			# 천장 조명 레일의 등기구
+			var can := MeshInstance3D.new()
+			var cm := CylinderMesh.new(); cm.top_radius = 0.09; cm.bottom_radius = 0.12; cm.height = 0.3
+			can.mesh = cm
+			can.position = Vector3(px, 4.7, 1.6)
+			can.rotation_degrees.x = 35
+			can.material_override = Data.flat_material(Color("#1A1A1A"))
+			add_child(can)
+			if top:
+				_crown(Vector3(px, 2.75, 0))
 			var holder := Node3D.new()
-			holder.position = Vector3(px, 0.5, 0)
-			holder.scale = Vector3.ONE * 0.75
+			holder.position = Vector3(px, 0.94, 0)
+			holder.scale = Vector3.ONE * 0.7
 			add_child(holder)
 			for d in rec["works"][i]:
 				holder.add_child(Piece.from_dict(d, false))
 			var nm: String = "나" if i == 0 else Game.players[i]["name"]
 			var tl: String = str(rec["titles"][i]) if rec.get("titles", []).size() > i else "무제"
-			var l := UI.label3d("「%s」\n%s ★%.1f" % [tl, nm, rec["avg"][i]], 24)
-			l.position = Vector3(px, 2.35, 0.4)
+			# 좌대 앞면 황동 명판
+			var pl := MeshInstance3D.new()
+			var plm := BoxMesh.new(); plm.size = Vector3(1.1, 0.36, 0.02)
+			pl.mesh = plm
+			pl.position = Vector3(px, 0.6, 0.71)
+			pl.material_override = _gold() if top else Data.plain_material(12, false, 2)
+			add_child(pl)
+			var l := Label3D.new()
+			l.font = Data.font_bold
+			l.text = "「%s」\n%s · ★%.1f%s" % [tl, nm, rec["avg"][i], "  · 1등" if top else ""]
+			l.font_size = 30
+			l.pixel_size = 0.003
+			l.width = 350
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.modulate = Color("#F7F1E3")
+			l.outline_size = 4
+			l.outline_modulate = Color(0, 0, 0, 0.6)
+			l.position = Vector3(px, 0.6, 0.725)
 			add_child(l)
-		x += rec["works"].size() * 2.0 + 3.0
+		x += rec["works"].size() * 2.6 + 3.0
 	span = maxf(1.0, x - 3.0)
 	cam = Camera3D.new()
 	cam.fov = 50
@@ -113,10 +147,21 @@ func _build_hud() -> void:
 	UI.corner(p, Control.PRESET_TOP_LEFT)
 
 
+static var _gold_m: StandardMaterial3D
+func _gold() -> StandardMaterial3D:
+	if _gold_m == null:
+		_gold_m = StandardMaterial3D.new()
+		_gold_m.albedo_color = Color("#D9AE45")
+		_gold_m.metallic = 0.45
+		_gold_m.roughness = 0.35
+	return _gold_m
+
+
 ## 금 왕관 (덩어리로)
 func _crown(at: Vector3) -> void:
 	var root := Node3D.new()
 	root.position = at
+	root.scale = Vector3.ONE * 0.7
 	add_child(root)
 	var ring := Piece.new().setup("cylinder", 4, false, Vector3(1.5, 0.35, 1.5))
 	ring.set_pscale(Vector3(1.5, 0.35, 1.5), false)
@@ -135,8 +180,8 @@ func _process(delta: float) -> void:
 	t += delta
 	var k := (sin(t * 0.18 - PI / 2) + 1.0) * 0.5
 	var target_x := k * span
-	cam.position = Vector3(target_x, 3.2, 8.5)
-	cam.look_at(Vector3(target_x, 0.9, 0))
+	cam.position = Vector3(target_x, 2.3, 6.2)
+	cam.look_at(Vector3(target_x, 1.3, 0))
 	if Game.autotest and t > 0.5:
 		print("[autotest] OK — reached %s, history %d" % [str(Game.get_meta("reached")), Game.history.size()])
 		get_tree().quit(0)

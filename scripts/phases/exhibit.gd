@@ -13,7 +13,7 @@ class RatingBar extends Control:
 	var dragging := false
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(420, 72)
+		custom_minimum_size = Vector2(360, 64)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
@@ -147,7 +147,7 @@ func _build_hud() -> void:
 	h.add_child(sp)
 	h.add_child(UI.primary("다음 작품 →  [Enter]", _next, 22))
 	layer.add_child(bottom)
-	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 16))
+	UI.corner(bottom, Control.PRESET_BOTTOM_RIGHT, Vector2(16, 16))
 
 
 func _show(k: int) -> void:

@@ -68,7 +68,7 @@ func goto(phase: String) -> void:
 	current.name = phase
 	add_child(current)
 	if Game.autotest:
-		print("[autotest] phase → %s (round %d)" % [phase, Game.round_i])
+		print("[autotest] phase → %s (round %d) f%d" % [phase, Game.round_i, Engine.get_frames_drawn()])
 
 
 func _arg(prefix: String) -> String:
