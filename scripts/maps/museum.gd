@@ -190,5 +190,7 @@ static func _storage(h) -> void:
 	for k in 3:
 		h.box_rot(Vector3(18.8, 0.7, 4.0 + k * 0.25), Vector3(1.4, 1.2, 0.05), [4, 12, 15][k], Vector3(0, 90, 12))
 	h.spot(Vector3(17.8, 0.02, 3.4), "open")
+	h.toy_ball(Vector3(15.5, 0, 5.0), 0.14, 0, 0.3)
+	h.toy_ball(Vector3(-13.0, 0, 9.0), 0.1, 4)
 
 

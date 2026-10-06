@@ -39,7 +39,7 @@ func _ready() -> void:
 
 
 func t_collect() -> float:
-	return 4.0 if autotest else (80.0 if short_mode else 150.0)
+	return 4.0 if autotest else (100.0 if short_mode else 180.0)
 
 
 func t_build() -> float:

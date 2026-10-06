@@ -8,9 +8,10 @@ const HULL := Color("#6E4526")
 const HULL_DARK := Color("#4A2E1A")
 const TRIM := Color("#C9A24A")
 const SAIL := Color("#F3EBD8")
-const DECK_Y := 3.0
-const QD_Y := 5.8
-const NEST_Y := 9.0
+const GUN_Y := 2.6     # 포갑판
+const DECK_Y := 5.2
+const QD_Y := 8.0
+const NEST_Y := 11.5
 
 
 static func build(h) -> Dictionary:
@@ -43,22 +44,23 @@ static func build(h) -> Dictionary:
 	h.wall(Vector2(15.0, 5.6), Vector2(20.5, 0.0), -0.3, DECK_Y + 1.3, HULL, 0.35)
 	h.wall(Vector2(14.0, -5.4), Vector2(14.0, 5.4), 0.0, DECK_Y, HULL)
 	# 건널판 (부두 → 갑판)
-	h.stairs(Vector3(-6.0, 0, -9.8), Vector3(-6.0, DECK_Y, -5.3), 1.5, Color("#8E6136"))
-	h.stairs(Vector3(7.5, 0, 9.8), Vector3(7.5, DECK_Y, 5.3), 1.5, Color("#8E6136"))
+	h.stairs(Vector3(-6.0, 0, -13.5), Vector3(-6.0, DECK_Y, -5.3), 1.5, Color("#8E6136"))
+	h.stairs(Vector3(7.5, 0, 13.5), Vector3(7.5, DECK_Y, 5.3), 1.5, Color("#8E6136"))
 	# 선체 장식 띠 · 대포 구멍
 	for side in [-1, 1]:
 		h.box_span(Vector3(-17.2, DECK_Y + 1.25, side * 5.62), Vector3(15.0, DECK_Y + 1.25, side * 5.62), 0.12, 0.42, TRIM)
 		h.box_span(Vector3(-17.2, 1.6, side * 5.8), Vector3(15.0, 1.6, side * 5.8), 0.2, 0.1, TRIM)
 		for k in 6:
-			h.box(Vector3(-11.0 + k * 4.0, 2.2, side * 5.8), Vector3(0.6, 0.5, 0.06), HULL_DARK, 0.0, false, 0.04)
+			h.box(Vector3(-11.0 + k * 4.0, GUN_Y + 1.0, side * 5.8), Vector3(0.6, 0.5, 0.06), HULL_DARK, 0.0, false, 0.04)
 	_hold(h)
+	_gundeck(h)
 	_deck(h)
 	_cabin(h)
 	_quarterdeck(h)
 	_masts(h)
 
 	return {
-		"levels": [0.0, DECK_Y, QD_Y, NEST_Y],
+		"levels": [0.0, GUN_Y, DECK_Y, QD_Y, NEST_Y],
 		"bounds": Rect2(-27, -16, 58, 32),
 		"spawns": [Vector3(0, 0, 11.5), Vector3(2, 0, 12.5), Vector3(4, 0, 11.5), Vector3(6, 0, 12.5), Vector3(-2, 0, 12.5), Vector3(8, 0, 11.5)],
 		"cam_yaw": 0.0,
@@ -67,9 +69,10 @@ static func build(h) -> Dictionary:
 			[Rect2(-26, 8, 56, 7), "북쪽 부두", 0, "#C9A27A"],
 			[Rect2(-26, -8, 7, 16), "뒤 부두", 0, "#C9A27A"],
 			[Rect2(-16, -5.4, 30, 10.8), "화물칸", 0, "#B98A5E"],
-			[Rect2(-17.2, -5.6, 32.2, 11.2), "갑판", 1, "#D0A475"],
-			[Rect2(-17.2, -5.6, 7.2, 11.2), "선장실 · 뒷갑판", 2, "#C8925C"],
-			[Rect2(-3.2, -1.2, 2.4, 2.4), "망루", 3, "#E2C27A"],
+			[Rect2(-16, -5.4, 30, 10.8), "포갑판", 1, "#C49A6C"],
+			[Rect2(-17.2, -5.6, 32.2, 11.2), "갑판", 2, "#D0A475"],
+			[Rect2(-17.2, -5.6, 7.2, 11.2), "선장실 · 뒷갑판", 3, "#C8925C"],
+			[Rect2(-3.2, -1.2, 2.4, 2.4), "망루", 4, "#E2C27A"],
 		],
 	}
 
@@ -115,6 +118,8 @@ static func _boathouse(h) -> void:
 		h.part("ring", 2, Color("#C9B48A"), p, Vector3.ZERO, 2.2)
 		h.spot(p, "open")
 	Props.table(h, Vector3(20.0, 0, 13.6), 0.0, Vector2(2.4, 1.0), Color("#8A6A47"), Color("#5E4128"), 2)
+	for bp in [Vector3(-14.0, 0, 11.0), Vector3(16.0, 0, -11.0)]:
+		h.toy_ball(bp, 0.16, Color("#2B2B2B"), 0.15)   # 대포알 — 무겁게 굴러간다
 	# 부두 사무실 (작은 방: 책상 · 서류함)
 	h.wall(Vector2(-20, -15), Vector2(-20, -10), 0.0, 3.0, Color("#D9C7A8"), 0.15, [[3.6, 1.6]])
 	h.wall(Vector2(-26, -10), Vector2(-20, -10), 0.0, 3.0, Color("#D9C7A8"), 0.15)
@@ -156,27 +161,27 @@ static func _hold(h) -> void:
 	for k in 6:
 		h.ball(Vector3(-1.0 + (k % 3) * 0.32, 0.16 + (k / 3) * 0.26, 4.6 - (k / 3) * 0.0), 0.16, Color("#2B2B2B"))
 	h.end_obj()
-	for lp in [Vector3(-12, 2.6, 0), Vector3(-4, 2.6, 2.5), Vector3(5, 2.6, -2.5), Vector3(11, 2.6, 1.5)]:
+	for lp in [Vector3(-12, 2.0, 0), Vector3(-4, 2.0, 2.5), Vector3(5, 2.0, -2.5), Vector3(11, 2.0, 1.5)]:
 		Props.lamp(h, lp, Color("#FFC27A"), 1.4, 8.0)
 	h.spot(Vector3(-15.6, 0.02, 4.6), "open")
 	h.spot(Vector3(13.4, 0.02, 0.0), "open")
 	# 계단 (화물칸 → 갑판, 해치 구멍으로)
-	h.stairs(Vector3(5.6, 0, 0.0), Vector3(0.45, DECK_Y, 0.0), 1.3, PLANK2)
+	h.stairs(Vector3(5.6, 0, 0.0), Vector3(0.45, GUN_Y, 0.0), 1.3, PLANK2)
 
 
 ## 갑판: 해치 구멍 · 대포 · 술통 · 밧줄 · 상자
 static func _deck(h) -> void:
-	h.lv(1)
-	for r in [Rect2(-17.0, -5.4, 17.45, 10.8), Rect2(5.65, -5.4, 9.35, 10.8), Rect2(0.45, -5.4, 5.2, 4.6), Rect2(0.45, 0.8, 5.2, 4.6)]:
+	h.lv(2)
+	for r in [Rect2(-17.0, -5.4, 10.6, 10.8), Rect2(-0.8, -5.4, 15.8, 10.8), Rect2(-6.4, -1.7, 5.6, 7.1), Rect2(-6.4, -5.4, 5.6, 1.9)]:
 		h.floor_rect(r, DECK_Y, 0, PLANK, PLANK2, 0.6, 0.3)
 	# 뱃머리 갑판 + 기움돛대
 	h.floor_rect(Rect2(15.0, -3.2, 2.8, 6.4), DECK_Y, 0, PLANK, PLANK2, 0.6, 0.3)
 	h.cyl_rot(Vector3(20.5, DECK_Y + 1.6, 0), 0.16, 6.0, PLANK2, Vector3(0, 0, -70))
-	# 해치 난간 (계단 입구 쪽 x=0.45 은 비움)
-	for e in [[Vector3(0.6, DECK_Y + 1.05, -0.85), Vector3(5.65, DECK_Y + 1.05, -0.85)], [Vector3(0.6, DECK_Y + 1.05, 0.85), Vector3(5.65, DECK_Y + 1.05, 0.85)], [Vector3(5.65, DECK_Y + 1.05, -0.85), Vector3(5.65, DECK_Y + 1.05, 0.85)]]:
+	# 해치 난간 (포갑판 계단 위 · 계단 끝 x=-6.4 쪽은 비움)
+	for e in [[Vector3(-6.2, DECK_Y + 1.05, -3.5), Vector3(-0.8, DECK_Y + 1.05, -3.5)], [Vector3(-6.2, DECK_Y + 1.05, -1.7), Vector3(-0.8, DECK_Y + 1.05, -1.7)], [Vector3(-0.8, DECK_Y + 1.05, -3.5), Vector3(-0.8, DECK_Y + 1.05, -1.7)]]:
 		h.box_span(e[0], e[1], 0.08, 0.08, TRIM, true, 1.1)
-	for x in [0.6, 3.0, 5.6]:
-		for z in [-0.85, 0.85]:
+	for x in [-6.2, -3.5, -0.8]:
+		for z in [-3.5, -1.7]:
 			h.box(Vector3(x, DECK_Y + 0.52, z), Vector3(0.08, 1.04, 0.08), TRIM, 0.0, false, 0.0)
 	# 대포 (양옆)
 	for side in [-1, 1]:
@@ -208,7 +213,7 @@ static func _deck(h) -> void:
 
 ## 선장실 (갑판 위 x -17 ~ -10): 큰 책상 · 보물상자 · 지도 탁자 · 책장 · 침대
 static func _cabin(h) -> void:
-	h.lv(1)
+	h.lv(2)
 	var wc := Color("#7A4E2C")
 	h.wall(Vector2(-10.0, -5.4), Vector2(-10.0, 5.4), DECK_Y, QD_Y - DECK_Y, wc, 0.25, [[5.4, 1.6]])
 	h.floor_rect(Rect2(-17.0, -5.4, 7.0, 10.8), DECK_Y + 0.01, 3, Color("#7A2E3A"), Color("#7A2E3A"), 0.95, 0.05)
@@ -228,7 +233,7 @@ static func _cabin(h) -> void:
 
 ## 뒷갑판 (선장실 지붕): 키 · 작은 상자 · 깃발
 static func _quarterdeck(h) -> void:
-	h.lv(2)
+	h.lv(3)
 	h.floor_rect(Rect2(-17.2, -5.6, 7.2, 11.2), QD_Y, 0, PLANK, PLANK2, 0.6, 0.3)
 	# 난간 (계단 입구 z 4.05~5.05 비움)
 	h.box_span(Vector3(-10.05, QD_Y + 1.0, -5.6), Vector3(-10.05, QD_Y + 1.0, 4.0), 0.08, 0.1, TRIM, true, 1.0)
@@ -255,7 +260,7 @@ static func _quarterdeck(h) -> void:
 
 ## 돛대 둘 + 돛 + 망루 (밧줄 사다리)
 static func _masts(h) -> void:
-	h.lv(1)
+	h.lv(2)
 	for mx in [-2.0, 9.0]:
 		h.cyl(Vector3(mx, DECK_Y + 5.5, 0), 0.3, 11.0, PLANK2, true, 12)
 		h.cyl_rot(Vector3(mx, DECK_Y + 3.0, 0), 0.12, 9.0, PLANK2, Vector3(90, 0, 0))
@@ -270,14 +275,59 @@ static func _masts(h) -> void:
 			var bot := Vector3(mx - 1.5, DECK_Y + 1.2, side * 5.5)
 			h.beam(top, bot, 0.04, Color("#C9B48A"))
 	# 망루 (큰 돛대, 높이 10)
-	h.lv(3)
+	h.lv(4)
 	h.floor_rect(Rect2(-3.2, -1.2, 2.4, 2.4), NEST_Y, 0, PLANK, PLANK2, 0.6, 0.2)
 	for e in [[Vector3(-3.2, NEST_Y + 1.0, -1.2), Vector3(-0.8, NEST_Y + 1.0, -1.2)], [Vector3(-3.2, NEST_Y + 1.0, -1.2), Vector3(-3.2, NEST_Y + 1.0, 1.2)], [Vector3(-0.8, NEST_Y + 1.0, -1.2), Vector3(-0.8, NEST_Y + 1.0, 1.2)]]:
 		h.box_span(e[0], e[1], 0.1, 0.1, PLANK2, true, 1.0)
 	h.spot(Vector3(-2.8, NEST_Y + 0.02, -0.8), "high")
 	h.spot(Vector3(-1.2, NEST_Y + 0.02, -0.7), "high")
 	h.part("cylinder", 2, TRIM, Vector3(-1.3, NEST_Y + 0.4, 0.6), Vector3(0, 0, 70), 0.5)
-	h.lv(1)
+	h.lv(2)
 	# 밧줄 사다리: 갑판(z 1.6) → 망루 앞 가장자리, 앞 = -z
 	h.ladder(Vector3(-2.0, DECK_Y, 1.65), NEST_Y, PI / 2 + PI / 2, Color("#C9B48A"))
+	h.lv(0)
+
+
+## 포갑판 (높이 2.6): 화물칸 위 · 갑판 아래. 양옆 대포 줄 · 해먹 · 식탁 · 화약통 · 부엌 화덕 · 포탄 선반
+static func _gundeck(h) -> void:
+	h.lv(1)
+	for r in [Rect2(-16.0, -5.4, 16.45, 10.8), Rect2(5.65, -5.4, 8.35, 10.8), Rect2(0.45, -5.4, 5.2, 4.6), Rect2(0.45, 0.8, 5.2, 4.6)]:
+		h.floor_rect(r, GUN_Y, 0, Color("#8E6136"), Color("#7A5230"), 0.65, 0.2)
+	# 화물칸 계단 구멍 난간
+	for e in [[Vector3(0.6, GUN_Y + 1.05, -0.85), Vector3(5.65, GUN_Y + 1.05, -0.85)], [Vector3(0.6, GUN_Y + 1.05, 0.85), Vector3(5.65, GUN_Y + 1.05, 0.85)], [Vector3(5.65, GUN_Y + 1.05, -0.85), Vector3(5.65, GUN_Y + 1.05, 0.85)]]:
+		h.box_span(e[0], e[1], 0.08, 0.08, TRIM, true, 1.1)
+	# 대포 줄 (포문 앞) — 대포마다 포탄 · 화약통
+	for side in [-1, 1]:
+		for k in 6:
+			var cp := Vector3(-11.0 + k * 4.0, GUN_Y, side * 4.5)
+			h.box(cp + Vector3(0, 0.25, 0), Vector3(1.0, 0.5, 0.8), HULL, 0.0, true, 0.05)
+			h.cyl_rot(cp + Vector3(0, 0.6, side * 0.3), 0.2, 1.5, Color("#2B2B2B"), Vector3(90, 0, 0))
+			for wz in [-0.3, 0.3]:
+				h.cyl_rot(cp + Vector3(-0.45, 0.15, wz), 0.15, 0.08, HULL_DARK, Vector3(0, 0, 90))
+			if k % 2 == 1:
+				Props.barrel(h, cp + Vector3(1.4, 0, -side * 0.4), 15, "화약통")
+			else:
+				h.ball(cp + Vector3(1.2, 0.16, -side * 0.5), 0.16, Color("#2B2B2B"))
+				h.spot(cp + Vector3(1.5, 0.02, -side * 0.9), "open")
+	# 해먹 (천장 들보에 매달림) · 식탁 · 의자
+	for k in 4:
+		var hp := Vector3(-13.0 + k * 2.6, GUN_Y, 0.0)
+		h.beam(hp + Vector3(-1.0, 2.3, 0), hp + Vector3(-0.8, 1.3, 0), 0.03, Color("#C9B48A"))
+		h.beam(hp + Vector3(1.0, 2.3, 0), hp + Vector3(0.8, 1.3, 0), 0.03, Color("#C9B48A"))
+		h.part("capsule", Vector3(1.0, 1.0, 1.0), Color("#E8DCC0"), hp + Vector3(0, 1.25, 0), Vector3(0, 0, 90), 2.3)
+		h.spot(hp + Vector3(0.2, 1.42, 0), "open")
+	Props.table(h, Vector3(8.5, GUN_Y, 0.0), 0.0, Vector2(3.0, 1.2), Color("#8A6A47"), Color("#5E4128"), 2)
+	for k in 3:
+		h.cyl(Vector3(7.5 + k * 1.0, GUN_Y + 0.85, 0.2), 0.08, 0.16, 14, false, 10, 0.3)
+	for z in [-1.2, 1.2]:
+		h.box(Vector3(8.5, GUN_Y + 0.25, z), Vector3(3.0, 0.08, 0.35), Color("#8A6A47"), 0.0, true, 0.02)
+	# 부엌 화덕 (문이 열린다) · 포탄 선반
+	h.box(Vector3(12.8, GUN_Y + 0.6, -2.4), Vector3(1.4, 1.2, 1.2), Color("#5A5A5A"), 0.0, true, 0.04)
+	h.cyl(Vector3(12.8, GUN_Y + 2.0, -2.4), 0.15, 1.6, Color("#3A3A3A"), false, 10)
+	h.container("door", Vector3(12.8, GUN_Y + 0.55, -1.78), Vector3(0.7, 0.6, 0.05), 0.0, 15, Vector3(12.8, GUN_Y + 0.35, -2.2), "화덕")
+	Props.bookshelf(h, Vector3(13.65, GUN_Y, 2.2), -PI / 2, 2.0, Color("#5E4128"), 3, false)
+	for lp in [Vector3(-10, GUN_Y + 2.0, 0), Vector3(-2, GUN_Y + 2.0, 2.5), Vector3(8, GUN_Y + 2.0, 0)]:
+		Props.lamp(h, lp, Color("#FFC27A"), 1.3, 7.0)
+	# 포갑판 → 갑판 계단 (갑판 구멍 x -6.4 ~ -0.8, z -3.5 ~ -1.7)
+	h.stairs(Vector3(-0.9, GUN_Y, -2.6), Vector3(-6.35, DECK_Y, -2.6), 1.4, PLANK2)
 	h.lv(0)

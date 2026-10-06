@@ -7,16 +7,16 @@ extends Node3D
 const SPEED := 5.6
 const GRAVITY := 22.0
 const JUMP_V := 8.6
-const BAG_MAX := 12            # 봉투 칸
+const BAG_MAX := 15            # 봉투 칸 (3분에 12칸이 다 차서 늘림)
 const REACH := 3.6
 const PEEK_R := 7.0
 const OPEN_TIME := 0.55        # 가구 여는 시간 배율
 const L_WORLD := 1
 const L_ITEM := 2
 const L_CHAR := 4
-const LVL_LAYERS := [1, 8, 16, 64]  # 층별 충돌 레이어 — 위층을 숨길 때 카메라가 그 층을 무시하게
+const LVL_LAYERS := [1, 8, 16, 64, 512]  # 층별 충돌 레이어
 const L_WALL := 32             # 벽 — 캐릭터는 막고 카메라는 통과 (위에서 들여다보는 인형의 집)
-const ALL_WORLD := 1 | 8 | 16 | 32 | 64 | 256   # 바닥 · 층 · 벽 · 가구 (밀 수 있는 것 128은 빼고 — 길찾기가 그걸 지나가며 민다)
+const ALL_WORLD := 1 | 8 | 16 | 32 | 64 | 256 | 512   # 바닥 · 층 · 벽 · 가구 (밀 수 있는 것 128은 빼고 — 길찾기가 그걸 지나가며 민다)
 var wall_mode := false
 
 var time_left := 150.0
@@ -548,6 +548,39 @@ func pushable(pos: Vector3, size: Vector3, c, yaw := 0.0, mass := 3.0) -> RigidB
 	lvl_roots[lvl].add_child(rb)
 	pushables.append({"body": rb, "start": rb.position, "inside": [], "lvl": lvl})
 	return rb
+
+## 찰 수 있는 공 (부딪히면 튀어 날아간다)
+func toy_ball(pos: Vector3, radius: float, c, bounce := 0.6) -> RigidBody3D:
+	var rb := RigidBody3D.new()
+	rb.collision_layer = L_PUSH
+	rb.collision_mask = ALL_WORLD | L_PUSH | L_CHAR
+	rb.mass = 0.5
+	rb.linear_damp = 0.25
+	rb.angular_damp = 0.4
+	var pm := PhysicsMaterial.new()
+	pm.bounce = bounce
+	pm.friction = 0.6
+	rb.physics_material_override = pm
+	rb.position = P(pos) + Vector3(0, radius * W + 0.05, 0)
+	var cs := CollisionShape3D.new()
+	var sh := SphereShape3D.new()
+	sh.radius = radius * W
+	cs.shape = sh
+	rb.add_child(cs)
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = radius * W
+	sm.height = radius * W * 2
+	sm.radial_segments = 18
+	sm.rings = 9
+	mi.mesh = sm
+	mi.material_override = Data.material(c) if c is int else Data.brick(c, false, 0.25, 0.3)
+	rb.add_child(mi)
+	rb.set_meta("ball", true)
+	rb.set_meta("furn", true)
+	lvl_roots[lvl].add_child(rb)
+	return rb
+
 
 ## 가구가 열린다
 func _open_anim(e: Dictionary) -> void:
@@ -1365,7 +1398,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if finished:
 		return
 	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and (looking or (event.button_mask & MOUSE_BUTTON_MASK_RIGHT)):
+	if event is InputEventMouseMotion and not bag_open:   # v0.6.3: 마우스를 움직이면 그냥 시점이 돈다 (우클릭 필요 없음)
 		cam_yaw -= event.relative.x * 0.0042 * Game.mouse_sens
 		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0036 * Game.mouse_sens, -1.2, 0.25)
 	elif event is InputEventMouseButton and event.pressed:
@@ -1736,9 +1769,76 @@ func run_scenario(sc: String) -> void:
 			cam_pitch = -0.6
 			act = best
 			return
+		"ball":
+			var me: Dictionary = actors[0]
+			var body: CharacterBody3D = me["body"]
+			var balls := []
+			for r in lvl_roots:
+				for c in (r as Node3D).get_children():
+					if c is RigidBody3D and c.has_meta("ball"):
+						balls.append(c)
+			balls.sort_custom(func(p, q): return p.global_position.z > q.global_position.z)
+			var bl: RigidBody3D = balls[balls.size() / 2]   # 체육관 가운데 공 (복도 공은 벽에 막힌다)
+			var b0 := bl.global_position
+			body.global_position = b0 + Vector3(0, 0, 3.0)
+			cam_yaw = 0.0
+			for i in 40:
+				await get_tree().physics_frame
+			sim_move = Vector2(0, -1)
+			for i in 50:
+				await get_tree().physics_frame
+			sim_move = Vector2.ZERO
+			for i in 60:
+				await get_tree().physics_frame
+			print("[ball] 공 %d개 · 찬 공 이동 %.1fm · 최고 높이 변화 %.1f" % [balls.size(), b0.distance_to(bl.global_position), bl.global_position.y - b0.y])
+		"play":
+			# 사람도 봇처럼 3분 (빠르게 감기) — 몇 개씩 줍나 · 막히는 데 없나
+			Engine.time_scale = 3.0
+			time_left = Game.t_collect()
+			var me: Dictionary = actors[0]
+			var stuck := 0
+			var last := Vector3.ZERO
+			while time_left > 0.5:
+				if act.is_empty():
+					var g := _bot_choose(me)
+					if not g.is_empty():
+						act = g["ref"]
+				await get_tree().create_timer(0.5).timeout
+				var p: Vector3 = me["body"].global_position
+				if p.distance_to(last) < 0.3:
+					stuck += 1
+					if stuck > 6:
+						print("[play] 오래 멈춤 @", p.snapped(Vector3.ONE * 0.1), " 목표 ", act.get("name", "-"))
+						_cancel_act()
+						stuck = 0
+				else:
+					stuck = 0
+				last = p
+			Engine.time_scale = 1.0
+			var line := ""
+			for a in actors:
+				var n := 0
+				for e in _envs(a):
+					n += (e["parts"] as Array).size()
+				line += "%s 봉투 %d(파츠 %d)  " % [Game.players[a["i"]]["name"], _envs(a).size(), n]
+			var left := 0
+			for e in treasures:
+				if e["alive"]:
+					left += 1
+			print("[play] %s 3분: %s · 남은 보물 %d" % [Game.theme, line, left])
 		"look":
 			for i in 25:
 				await get_tree().physics_frame
+			for s in OS.get_cmdline_user_args():
+				if s.begins_with("--room="):
+					for r in info["rooms"]:
+						if r[1] == s.substr(7):
+							var rr: Rect2 = r[0]
+							var b: CharacterBody3D = actors[0]["body"]
+							var g := nav.get_closest_point(Vector3(rr.get_center().x, level_y(int(r[2])), rr.get_center().y))
+							b.global_position = nav.get_point_position(g) + Vector3(0, 0.2, 0)
+							for i in 10:
+								await get_tree().physics_frame
 			cam_yaw = 0.6
 			return
 	print("[scenario] done")
@@ -1825,48 +1925,99 @@ func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, slide := false)
 
 
 func _character(i: int) -> Node3D:
-	# 장난감 인형: 통통한 몸통 · 둥근 머리 · 눈 · 볼. 동물 친구는 귀 · 부리로 구분 (미니피겨형은 v0.5에서 뺐다)
+	# 작은 탐험가: 다리 · 팔은 따로 움직이는 관절(걸으면 흔든다) · 몸통 · 배낭 · 머리. 동물 친구는 귀 · 부리
 	var p: Dictionary = Game.players[i]
 	var c: int = p["color"]
 	var root := Node3D.new()
-	var head := 0
-	var parts := [
-		["capsule", Vector3(1.9, 1.05, 1.9), c, Vector3(0, 0.55, 0), Vector3.ZERO, 1.0],
-		["sphere", Vector3(1.1, 1.0, 1.1), head, Vector3(0, 1.36, 0), Vector3.ZERO, 1.0],
-		["sphere", 0, 15, Vector3(-0.11, 1.42, -0.3), Vector3.ZERO, 0.12],
-		["sphere", 0, 15, Vector3(0.11, 1.42, -0.3), Vector3.ZERO, 0.12],
-		["sphere", 0, 1, Vector3(-0.2, 1.3, -0.25), Vector3.ZERO, 0.12],
-		["sphere", 0, 1, Vector3(0.2, 1.3, -0.25), Vector3.ZERO, 0.12],
-		["capsule", Vector3(0.8, 0.6, 0.8), c, Vector3(-0.36, 0.72, -0.05), Vector3(0, 0, -25), 1.0],
-		["capsule", Vector3(0.8, 0.6, 0.8), c, Vector3(0.36, 0.72, -0.05), Vector3(0, 0, 25), 1.0],
-	]
+	var skin := Color("#F2D3B3")
+	var pants := Color("#3A4A63")
+	var add := func(parent: Node3D, t: String, shp: Vector3, col, pos: Vector3, rot := Vector3.ZERO) -> Piece:
+		var pc := Piece.new().setup(t, col if col is int else 0, false, shp)
+		pc.set_pscale(shp, false)
+		if not (col is int):
+			pc.mesh_inst.material_override = Data.brick(col, false, 0.25, 0.5)
+		pc.position = pos
+		pc.rotation_degrees = rot
+		parent.add_child(pc)
+		return pc
+	# 다리 (엉덩이 관절)
+	for s in [-1, 1]:
+		var hip := Node3D.new()
+		hip.name = "leg_l" if s < 0 else "leg_r"
+		hip.position = Vector3(s * 0.12, 0.55, 0)
+		root.add_child(hip)
+		add.call(hip, "capsule", Vector3(0.75, 0.85, 0.75), pants, Vector3(0, -0.27, 0))
+		add.call(hip, "box", Vector3(0.38, 0.18, 0.6), Color("#3B2B22"), Vector3(0, -0.5, -0.05))
+	# 몸통 · 허리띠 · 배낭
+	add.call(root, "box", Vector3(0.95, 0.95, 0.62), c, Vector3(0, 0.8, 0))
+	add.call(root, "box", Vector3(0.97, 0.12, 0.64), Color("#5A3E2B"), Vector3(0, 0.6, 0))
+	add.call(root, "box", Vector3(0.7, 0.85, 0.36), Color("#B5763C"), Vector3(0, 0.84, 0.23))
+	add.call(root, "box", Vector3(0.5, 0.3, 0.1), Color("#8E5A2C"), Vector3(0, 0.74, 0.32))
+	# 팔 (어깨 관절)
+	for s in [-1, 1]:
+		var sh := Node3D.new()
+		sh.name = "arm_l" if s < 0 else "arm_r"
+		sh.position = Vector3(s * 0.27, 1.0, 0)
+		sh.rotation_degrees = Vector3(0, 0, s * 8)
+		root.add_child(sh)
+		add.call(sh, "capsule", Vector3(0.6, 0.72, 0.6), c, Vector3(0, -0.2, 0))
+		add.call(sh, "sphere", Vector3(0.22, 0.22, 0.22), skin, Vector3(0, -0.42, 0))
+	# 머리 · 얼굴
+	var head := Node3D.new()
+	head.name = "head"
+	head.position = Vector3(0, 1.32, 0)
+	root.add_child(head)
+	add.call(head, "sphere", Vector3(0.95, 0.9, 0.9), skin, Vector3.ZERO)
+	for s in [-1, 1]:
+		add.call(head, "sphere", Vector3(0.11, 0.14, 0.08), 15, Vector3(s * 0.09, 0.03, -0.25))
+		add.call(head, "sphere", Vector3(0.1, 0.06, 0.05), Color("#F0A0A0"), Vector3(s * 0.16, -0.06, -0.22))
+	add.call(head, "box", Vector3(0.14, 0.03, 0.03), Color("#7A4A3A"), Vector3(0, -0.1, -0.265))
 	match p["name"]:
 		"나":
-			parts.append(["hemi", Vector3(1.15, 0.8, 1.15), 8, Vector3(0, 1.58, 0.01), Vector3.ZERO, 1.0])
-			parts.append(["plate", Vector3(0.45, 0.6, 0.55), 8, Vector3(0, 1.56, -0.3), Vector3.ZERO, 1.0])
+			add.call(head, "hemi", Vector3(1.0, 0.7, 1.0), 8, Vector3(0, 0.1, 0.01))
+			add.call(head, "plate", Vector3(0.42, 0.6, 0.5), 8, Vector3(0, 0.08, -0.27))
 		"곰돌이":
-			parts.append(["sphere", 0, 12, Vector3(-0.22, 1.62, 0), Vector3.ZERO, 0.32])
-			parts.append(["sphere", 0, 12, Vector3(0.22, 1.62, 0), Vector3.ZERO, 0.32])
+			for s in [-1, 1]:
+				add.call(head, "sphere", Vector3(0.3, 0.3, 0.2), 12, Vector3(s * 0.2, 0.24, 0))
+			add.call(head, "hemi", Vector3(1.0, 0.6, 1.0), 12, Vector3(0, 0.1, 0.02))
 		"토끼":
-			parts.append(["capsule", Vector3(0.7, 0.9, 0.7), 1, Vector3(-0.12, 1.85, 0), Vector3(0, 0, 8), 1.0])
-			parts.append(["capsule", Vector3(0.7, 0.9, 0.7), 1, Vector3(0.12, 1.85, 0), Vector3(0, 0, -8), 1.0])
+			for s in [-1, 1]:
+				add.call(head, "capsule", Vector3(0.6, 0.85, 0.5), 0, Vector3(s * 0.1, 0.42, 0.02), Vector3(0, 0, s * -8))
 		"펭귄":
-			parts.append(["hemi", Vector3(1.15, 0.8, 1.15), 15, Vector3(0, 1.58, 0.01), Vector3.ZERO, 1.0])
-			parts.append(["cone", Vector3(0.3, 0.3, 0.3), 3, Vector3(0, 1.34, -0.34), Vector3(-90, 0, 0), 1.0])
+			add.call(head, "hemi", Vector3(1.0, 0.75, 1.0), 15, Vector3(0, 0.08, 0.02))
+			add.call(head, "cone", Vector3(0.28, 0.3, 0.28), 3, Vector3(0, -0.04, -0.3), Vector3(-90, 0, 0))
 		"여우":
-			parts.append(["cone", Vector3(0.5, 0.55, 0.5), 3, Vector3(-0.17, 1.7, 0), Vector3(0, 0, 14), 1.0])
-			parts.append(["cone", Vector3(0.5, 0.55, 0.5), 3, Vector3(0.17, 1.7, 0), Vector3(0, 0, -14), 1.0])
+			for s in [-1, 1]:
+				add.call(head, "cone", Vector3(0.45, 0.55, 0.4), 3, Vector3(s * 0.15, 0.32, 0), Vector3(0, 0, s * -14))
+			add.call(head, "hemi", Vector3(1.0, 0.55, 1.0), 3, Vector3(0, 0.12, 0.03))
 		"고양이":
-			parts.append(["cone", Vector3(0.42, 0.45, 0.42), 14, Vector3(-0.17, 1.68, 0), Vector3(0, 0, 14), 1.0])
-			parts.append(["cone", Vector3(0.42, 0.45, 0.42), 14, Vector3(0.17, 1.68, 0), Vector3(0, 0, -14), 1.0])
-	for q in parts:
-		var shp := _shape_of(q[0], q[1])
-		var pc := Piece.new().setup(q[0], q[2], false, shp)
-		pc.set_pscale(shp * float(q[5]), false)
-		pc.position = q[3]
-		pc.rotation_degrees = q[4]
-		root.add_child(pc)
+			for s in [-1, 1]:
+				add.call(head, "cone", Vector3(0.38, 0.42, 0.36), 14, Vector3(s * 0.15, 0.3, 0), Vector3(0, 0, s * -14))
+			add.call(head, "hemi", Vector3(1.0, 0.55, 1.0), 14, Vector3(0, 0.12, 0.03))
 	return root
+
+
+## 걷기 · 숨쉬기 애니메이션 (관절 흔들기)
+func _animate_limbs(a: Dictionary, moving: bool, on_floor: bool, delta: float) -> void:
+	var vis: Node3D = a["vis"]
+	var t: float = a["walk_t"]
+	var k: float = a.get("swing", 0.0)
+	k = lerpf(k, 1.0 if moving and on_floor else 0.0, 1.0 - exp(-10.0 * delta))
+	a["swing"] = k
+	var sw := sin(t * 11.0) * 0.75 * k
+	var air := 0.0 if on_floor else 0.6
+	var ll := vis.get_node_or_null("leg_l") as Node3D
+	var lr := vis.get_node_or_null("leg_r") as Node3D
+	var al := vis.get_node_or_null("arm_l") as Node3D
+	var ar := vis.get_node_or_null("arm_r") as Node3D
+	var hd := vis.get_node_or_null("head") as Node3D
+	if ll:
+		ll.rotation.x = sw - air * 0.5
+		lr.rotation.x = -sw + air * 0.3
+		al.rotation.x = -sw * 0.8 - air
+		ar.rotation.x = sw * 0.8 - air
+		var breathe := sin(Time.get_ticks_msec() * 0.003 + float(a["i"])) * 0.02 * (1.0 - k)
+		hd.position.y = 1.32 + breathe
 
 
 ## 찌그러졌다 돌아오기 (착지 · 줍기)
@@ -1953,10 +2104,20 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 	for ci in body.get_slide_collision_count():
 		var kc := body.get_slide_collision(ci)
 		var rb := kc.get_collider() as RigidBody3D
-		if rb and kc.get_normal().y < 0.5:
+		if rb and (kc.get_normal().y < 0.5 or rb.has_meta("ball")):
 			var push := -kc.get_normal()
 			push.y = 0.0
-			rb.apply_central_impulse(push.normalized() * 0.9 * rb.mass * delta * 8.0)
+			if push.length() < 0.2:
+				push = Vector3(vel.x, 0, vel.z)
+			if rb.has_meta("ball"):
+				# 공: 뻥 — 달리는 속도만큼 세게, 살짝 위로
+				if rb.linear_velocity.length() < 2.5 and push.length() > 0.01:
+					var sp := Vector2(vel.x, vel.z).length()   # 부딪히기 전 속도
+					rb.apply_central_impulse((push.normalized() * (2.0 + sp * 0.9) + Vector3.UP * (1.5 + sp * 0.3)) * rb.mass)
+					if not a["bot"]:
+						Sfx.play("tick", -4.0, 0.3)
+			else:
+				rb.apply_central_impulse(push.normalized() * 0.9 * rb.mass * delta * 8.0)
 	# 지금 밟고 있는 것
 	var floor_obj: Object = null
 	if body.is_on_floor():
@@ -1978,7 +2139,8 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(-v.x, -v.z), 1.0 - exp(-14.0 * delta))
 		a["walk_t"] += delta
 	var vis: Node3D = a["vis"]
-	vis.position.y = absf(sin(a["walk_t"] * 9.0)) * 0.09 if moving and body.is_on_floor() else lerpf(vis.position.y, 0.0, 0.3)
+	vis.position.y = absf(sin(a["walk_t"] * 11.0)) * 0.05 if moving and body.is_on_floor() else lerpf(vis.position.y, 0.0, 0.3)
+	_animate_limbs(a, moving, body.is_on_floor(), delta)
 
 
 ## 앞이 발목~허리 높이에서만 막혀 있으면 올라설 수 있는 턱
@@ -2082,7 +2244,7 @@ func _build_camera() -> void:
 	add_child(cam_pivot)
 	spring = SpringArm3D.new()
 	spring.spring_length = zoom
-	spring.collision_mask = L_WALL | 1 | 8 | 16 | 64   # 벽 · 바닥 · 층에 부딪히면 앞으로 (가구는 통과)
+	spring.collision_mask = L_WALL | 1 | 8 | 16 | 64 | 512   # 벽 · 바닥 · 층에 부딪히면 앞으로 (가구는 통과)
 	spring.margin = 0.3
 	var sph := SphereShape3D.new()
 	sph.radius = 0.25

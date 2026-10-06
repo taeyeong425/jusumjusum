@@ -23,7 +23,10 @@ static func build(h) -> Dictionary:
 	h.floor_rect(Rect2(8, 2, 12, 10), 0.0, 1, Color("#F2EFE8"), Color("#DCE6EE"))             # 미술실
 	h.floor_rect(Rect2(-20, 12, 40, 12), 0.0, 0, Color("#D9B27A"), Color("#CDA36B"), 0.35)    # 체육관
 	# 천장
-	h.ceiling(Rect2(-20, -12, 40, 14), H, Color("#F7F4EE"))
+	# 북쪽 동 1층 천장 = 2층 바닥 (계단 구멍 위는 비움)
+	h.ceiling(Rect2(-20, -12, 22.6, 14), H, Color("#F7F4EE"))
+	h.ceiling(Rect2(10.8, -12, 9.2, 14), H, Color("#F7F4EE"))
+	h.ceiling(Rect2(2.6, -12, 8.2, 12.2), H, Color("#F7F4EE"))
 	h.ceiling(Rect2(-20, 2, 12, 10), H, Color("#F7F4EE"))
 	h.ceiling(Rect2(8, 2, 12, 10), H, Color("#F7F4EE"))
 	h.ceiling(Rect2(-8, 2, 16, 10), 4.2, Color("#F7F4EE"))
@@ -58,9 +61,10 @@ static func build(h) -> Dictionary:
 	_library(h, rng)
 	_art(h)
 	_gym(h)
+	_second_floor(h)
 
 	return {
-		"levels": [0.0, 1.0, 2.6],
+		"levels": [0.0, 1.0, 2.6, 3.2],
 		"bounds": Rect2(-21, -13, 42, 38),
 		"spawns": [Vector3(-3, 0, 0), Vector3(-1, 0, 0.5), Vector3(1, 0, -0.5), Vector3(3, 0, 0), Vector3(-2, 0, -0.8), Vector3(2, 0, 0.8)],
 		"cam_yaw": 0.0,
@@ -75,6 +79,10 @@ static func build(h) -> Dictionary:
 			[Rect2(8, 2, 12, 10), "미술실", 0, "#F2EFE8"],
 			[Rect2(-20, 12, 40, 12), "체육관", 0, "#E6CFA8"],
 			[Rect2(-20, 12, 6, 12), "무대", 1, "#C99A6A"],
+			[Rect2(-20, -2, 40, 4), "2층 복도", 3, "#E4E9EC"],
+			[Rect2(-20, -12, 16, 10), "과학실", 3, "#C9D6C9"],
+			[Rect2(-4, -12, 14, 10), "컴퓨터실", 3, "#D3DAE2"],
+			[Rect2(10, -12, 10, 10), "방송실", 3, "#D8CCDA"],
 		],
 	}
 
@@ -119,6 +127,9 @@ static func _gym(h) -> void:
 	for k in 6:
 		h.part("cone", 0, 3, Vector3(-8.0 + k * 1.6, 0.18, 20.0), Vector3.ZERO, 0.6)
 	h.spot(Vector3(19.0, 0.02, 13.0), "open")
+	# 찰 수 있는 공들
+	for bp in [[Vector3(-2.0, 0, 18.0), 3], [Vector3(4.0, 0, 16.0), 0], [Vector3(10.0, 0, 20.0), 2], [Vector3(-8.0, 0, 14.5), 8], [Vector3(14.0, 0, 21.0), 3]]:
+		h.toy_ball(bp[0], 0.13, bp[1])
 	h.spot(Vector3(-11.0, 0.02, 12.6), "open")
 
 
@@ -197,10 +208,11 @@ static func _hall(h) -> void:
 		x += 0.7
 	# 남쪽 벽엔 게시판 · 소화기 · 의자
 	Props.bench(h, Vector3(-4.0, 0, 1.55), PI, Color("#C9A27A"), Color("#5E6B78"))
-	Props.bench(h, Vector3(5.0, 0, 1.55), PI, Color("#C9A27A"), Color("#5E6B78"))
 	h.cyl(Vector3(-19.5, 0.35, 1.6), 0.13, 0.7, 2, true, 10)
 	Props.frame(h, Vector3(9.0, 1.8, 1.86), PI, Vector2(1.4, 0.9), 12, 4, "게시판")
 	h.spot(Vector3(-10.5, 0.02, 1.4), "open")
+	h.toy_ball(Vector3(-8.0, 0, 0.0), 0.11, 2)
+	h.toy_ball(Vector3(15.0, 0, 0.3), 0.11, 8)
 	h.spot(Vector3(17.5, 0.02, 1.4), "open")
 	for d in doors_s:
 		pass
@@ -300,3 +312,82 @@ static func _art(h) -> void:
 	Props.cubbies(h, Vector3(9.0, 0, 2.45), 0.0, 4, 2, Color("#D9B98F"))
 	Props.crate(h, Vector3(9.2, 0, 11.2), 0.0, Vector3(1.0, 0.9, 0.7), 13, 13, "가마")
 
+
+
+## 2층 (높이 3.2): 북쪽 동 위 — 과학실 · 컴퓨터실 · 방송실 · 2층 복도. 1층 복도 계단으로 오른다
+const F2 := 3.2
+const H2 := 3.0
+
+
+static func _second_floor(h) -> void:
+	# 1층 복도 → 2층 계단 (복도 남쪽, 도서관 문과 미술실 문 사이)
+	h.stairs(Vector3(2.8, 0, 1.0), Vector3(10.8, F2, 1.0), 1.6, Color("#C9C2B4"))
+	h.lv(3)
+	# 바닥 (계단 구멍 x 2.6~10.8 · z 0.2~1.8 은 비움)
+	h.floor_rect(Rect2(-20, -12, 22.6, 14), F2, 0, Color("#C9A27A"), Color("#B88E64"), 0.55, 0.2)
+	h.floor_rect(Rect2(10.8, -12, 9.2, 14), F2, 0, Color("#C9A27A"), Color("#B88E64"), 0.55, 0.2)
+	h.floor_rect(Rect2(2.6, -12, 8.2, 12.2), F2, 0, Color("#C9A27A"), Color("#B88E64"), 0.55, 0.2)
+	for r in [Rect2(-20, -2, 22.6, 4), Rect2(10.8, -2, 9.2, 4), Rect2(2.6, -2, 8.2, 2.2)]:
+		h.floor_rect(r, F2 + 0.01, 1, Color("#E4E9EC"), Color("#CBD3D8"), 0.5, 0.02)
+	h.ceiling(Rect2(-20, -12, 40, 14), F2 + H2, Color("#F7F4EE"))
+	# 계단 구멍 난간
+	h.box_span(Vector3(2.6, F2 + 1.05, 0.2), Vector3(10.8, F2 + 1.05, 0.2), 0.08, 0.08, Color("#8A6B4E"), true, 1.1)
+	h.box_span(Vector3(2.6, F2 + 1.05, 0.2), Vector3(2.6, F2 + 1.05, 1.8), 0.08, 0.08, Color("#8A6B4E"), true, 1.1)
+	# 벽
+	h.wall(Vector2(-20, -12), Vector2(20, -12), F2, H2, WALL, 0.25, [], [[4.0, 2.0], [12.0, 2.0], [20.0, 2.0], [28.0, 2.0], [36.0, 2.0]])
+	h.wall(Vector2(-20, -12), Vector2(-20, 2), F2, H2, WALL, 0.25, [], [[7.0, 2.0]])
+	h.wall(Vector2(20, -12), Vector2(20, 2), F2, H2, WALL, 0.25, [], [[7.0, 2.0]])
+	h.wall(Vector2(-20, 2), Vector2(20, 2), F2, H2, WALL, 0.25, [], [[6.0, 2.0], [30.0, 2.0]])
+	h.wall(Vector2(-20, -2), Vector2(20, -2), F2, H2, WALL2, 0.2, [[8.0, 2.6], [22.0, 2.6], [34.0, 2.6]])
+	h.wall(Vector2(-4, -12), Vector2(-4, -2), F2, H2, WALL)
+	h.wall(Vector2(10, -12), Vector2(10, -2), F2, H2, WALL)
+	# 과학실 (x -20 ~ -4): 실험대(서랍) · 개수대 · 약품장 · 해골 모형 · 비커
+	for k in 2:
+		for j in 2:
+			var p := Vector3(-16.0 + k * 6.0, F2, -9.0 + j * 3.6)
+			Props.big_desk(h, p, 0.0, Color("#2F3B45"), Color("#E8E2D6"), 14, "실험대 서랍")
+			for b in 3:
+				h.cyl(p + Vector3(-0.6 + b * 0.5, 0.9, -0.1), 0.08, 0.22, [7, 5, 11][b], false, 10, 0.2)
+	Props.cabinet(h, Vector3(-19.4, F2, -5.0), PI / 2, 0, 7, "약품장")
+	Props.cabinet(h, Vector3(-6.0, F2, -11.6), 0.0, 0, 7, "약품장")
+	h.box(Vector3(-11.0, F2 + 0.45, -11.55), Vector3(2.4, 0.9, 0.7), 0, 0.0, true, 0.04)
+	h.box(Vector3(-11.0, F2 + 0.92, -11.55), Vector3(1.6, 0.06, 0.5), Color("#9FB6C4"), 0.0, false, 0.02)
+	h.ball(Vector3(-18.6, F2 + 1.65, -11.0), 0.16, 0, Vector3(1, 1.2, 1))
+	h.box(Vector3(-18.6, F2 + 1.1, -11.0), Vector3(0.18, 0.8, 0.1), 0, 0.0, false, 0.03)
+	h.box(Vector3(-18.6, F2 + 0.4, -11.0), Vector3(0.04, 0.8, 0.04), 0, 0.0, false, 0.0)
+	h.spot(Vector3(-18.0, F2 + 0.02, -3.0), "open")
+	# 컴퓨터실 (x -4 ~ 10): 책상 줄 + 모니터 · 서버장(문) · 프린터(뚜껑)
+	for k in 3:
+		for j in 2:
+			var p := Vector3(-1.0 + k * 3.4, F2, -9.5 + j * 3.4)
+			Props.desk(h, p, 0.0, Color("#E6E8EA"), Color("#5E6B78"), 8, (k + j) % 2 == 0)
+			h.box(p + Vector3(0, 1.0, -0.12), Vector3(0.55, 0.38, 0.04), Color("#1E2A33"), 0.0, false, 0.02)
+			h.box(p + Vector3(0, 0.79, 0.12), Vector3(0.4, 0.02, 0.14), Color("#3A4650"), 0.0, false, 0.0)
+	Props.locker(h, Vector3(9.3, F2, -11.5), 0.0, 15, 9)
+	Props.locker(h, Vector3(8.6, F2, -11.5), 0.0, 15, 9)
+	Props.crate(h, Vector3(-3.0, F2, -3.0), 0.0, Vector3(0.8, 0.5, 0.6), 0, 14, "프린터")
+	# 방송실 (x 10 ~ 20): 방송 책상 · 스피커 · 상자 더미 (밟고 오르면 선반)
+	Props.big_desk(h, Vector3(15.0, F2, -9.5), 0.0, Color("#3F3A36"), Color("#2B2B2B"), 15, "방송실 서랍")
+	for sp in [Vector3(11.0, F2, -11.5), Vector3(19.0, F2, -11.5)]:
+		h.box(sp + Vector3(0, 0.6, 0), Vector3(0.6, 1.2, 0.5), Color("#2B2B2B"), 0.0, true, 0.06)
+		h.cyl_rot(sp + Vector3(0, 0.75, 0.26), 0.2, 0.02, Color("#555555"), Vector3(90, 0, 0))
+	h.box(Vector3(18.6, F2 + 0.4, -6.0), Vector3(1.2, 0.8, 1.0), 13, 0.0, true, 0.04)
+	h.box(Vector3(18.8, F2 + 1.2, -6.2), Vector3(0.9, 0.8, 0.8), 13, 0.2, true, 0.04)
+	h.box(Vector3(19.4, F2 + 1.9, -3.5), Vector3(1.0, 0.08, 2.6), Color("#8A6B4E"), 0.0, true, 0.02)
+	h.spot(Vector3(19.4, F2 + 1.96, -3.0), "high")
+	# 2층 복도: 사물함 · 상패장(뚜껑) · 정수기 · 벤치
+	var x := -19.0
+	var i := 0
+	while x < 19.4:
+		if absf(x - (-12.0)) > 1.6 and absf(x - 2.0) > 1.6 and absf(x - 14.0) > 1.6:
+			Props.locker(h, Vector3(x, F2, -1.72), 0.0, 14, [10, 6, 3][(i / 4) % 3])
+			i += 1
+		x += 0.7
+	h.box(Vector3(-14.0, F2 + 0.5, 1.6), Vector3(2.0, 1.0, 0.5), 12, 0.0, true, 0.03)
+	h.container("lid", Vector3(-14.0, F2 + 1.03, 1.6), Vector3(2.0, 0.06, 0.5), PI, 7, Vector3(-14.0, F2 + 1.06, 1.6), "상패장")
+	for k in 3:
+		h.part("cylinder", 6, 4, Vector3(-14.6 + k * 0.6, F2 + 1.2, 1.6), Vector3.ZERO, 0.5)
+	Props.bench(h, Vector3(-6.0, F2, 1.55), PI, Color("#C9A27A"), Color("#5E6B78"))
+	h.cyl(Vector3(16.0, F2 + 0.5, 1.6), 0.25, 1.0, 0, true, 12)
+	h.spot(Vector3(12.5, F2 + 0.02, 1.4), "open")
+	h.lv(0)
