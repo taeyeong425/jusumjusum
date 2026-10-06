@@ -85,11 +85,17 @@ static func _boathouse(h) -> void:
 	h.floor_rect(Rect2(-26, 8, 56, 7), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
 	h.floor_rect(Rect2(-26, -8, 7, 16), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
 	h.floor_rect(Rect2(24, -8, 6, 16), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
+	# 부두 가장자리 밧줄 난간 (물에 안 빠지게) — 건널판 자리(북 x 7.5 · 남 x -6)만 비움
+	for seg in [[Vector3(-19, 0.9, 8), Vector3(6.4, 0.9, 8)], [Vector3(8.6, 0.9, 8), Vector3(24, 0.9, 8)], [Vector3(-19, 0.9, -8), Vector3(-7.1, 0.9, -8)], [Vector3(-4.9, 0.9, -8), Vector3(24, 0.9, -8)], [Vector3(-19, 0.9, -8), Vector3(-19, 0.9, 8)], [Vector3(24, 0.9, -8), Vector3(24, 0.9, 8)]]:
+		h.box_span(seg[0], seg[1], 0.06, 0.06, Color("#C9B48A"), true, 1.0)
+	for k in 12:
+		for z in [-8.0, 8.0]:
+			h.box(Vector3(-19.0 + k * 3.9, 0.45, z), Vector3(0.12, 0.9, 0.12), Color("#5E4128"), 0.0, false, 0.02)
 	# 부두 가장자리 말뚝 · 테두리
 	for z in [-8.0, 8.0]:
 		h.box_span(Vector3(-19.0, 0.1, z), Vector3(24.0, 0.1, z), 0.2, 0.3, Color("#5E4128"))
 		for k in 9:
-			h.cyl(Vector3(-18.0 + k * 5.0, -0.2, z), 0.22, 1.2, Color("#5E4128"), true, 10)
+			h.cyl(Vector3(-18.0 + k * 5.0, -0.42, z), 0.22, 0.8, Color("#5E4128"), true, 10)
 	h.ceiling(Rect2(-26, -15, 56, 30), TOP, Color("#6E5A46"))
 	h.wall(Vector2(-26, -15), Vector2(30, -15), 0.0, TOP, WOOD, 0.4, [], [[8.0, 3.0], [20.0, 3.0], [32.0, 3.0], [44.0, 3.0]])
 	h.wall(Vector2(-26, 15), Vector2(30, 15), 0.0, TOP, WOOD, 0.4, [], [[8.0, 3.0], [20.0, 3.0], [32.0, 3.0], [44.0, 3.0]])

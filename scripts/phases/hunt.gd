@@ -944,6 +944,20 @@ func _path_dir(a: Dictionary, delta: float) -> Vector3:
 	while int(a.get("pi", 0)) < path.size():
 		var w: Vector3 = path[int(a["pi"])]
 		a["climb_ok"] = w.y > body.global_position.y + 0.5   # 사다리는 길이 위로 갈 때만 오른다
+		# 다음 지점이 훨씬 위(사다리 꼭대기)면, 그 사다리 밑으로 먼저 간다 — 지나쳐서 밑에 끼지 않게
+		if w.y > body.global_position.y + 1.4:
+			for l in ladders:
+				if absf(float(l["y1"]) - w.y) < 1.2 and absf(float(l["y0"]) - body.global_position.y) < 1.2:
+					var lp: Vector2 = l["pos"]
+					var to_l := Vector3(lp.x - body.global_position.x, 0, lp.y - body.global_position.z)
+					if to_l.length() > 0.3:
+						# 사다리 앞쪽(오르는 방향 반대편)으로 붙는다
+						var lf: Vector3 = l["fwd"]
+						var stand := Vector3(lp.x, 0, lp.y) - lf * 0.35
+						var to_s := Vector3(stand.x - body.global_position.x, 0, stand.z - body.global_position.z)
+						if to_s.length() > 0.25:
+							return to_s.normalized()
+						return lf
 		var d := Vector3(w.x - body.global_position.x, 0, w.z - body.global_position.z)
 		if d.length() > 0.35 or absf(w.y - body.global_position.y) > 1.4:
 			if float(a["pt"]) <= 0.0:
@@ -1071,7 +1085,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			_human_step(a, delta)
 		var body: CharacterBody3D = a["body"]
-		if body.global_position.y < -4.0:
+		if body.global_position.y < -0.6:   # 물(바닥 아래)에 빠지면 바로 처음 자리로
 			body.global_position = a["spawn"] + Vector3(0, 0.5, 0)
 			body.velocity = Vector3.ZERO
 			if not a["bot"]:
@@ -1867,6 +1881,10 @@ func run_scenario(sc: String) -> void:
 				if e["alive"]:
 					left += 1
 			print("[play] %s 3분: %s · 남은 보물 %d" % [Game.theme, line, left])
+			for a in actors:
+				if a["bot"] and _envs(a).size() < 10:
+					var g: Dictionary = a["goal"]
+					print("[play] 느린 봇 %s @%s 목표 %s @%s wait=%.1f" % [Game.players[a["i"]]["name"], (a["body"] as Node3D).global_position.snapped(Vector3.ONE * 0.1), g["ref"]["name"] if not g.is_empty() else "-", ((g["ref"]["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)) if not g.is_empty() and is_instance_valid(g["ref"]["node"]) else Vector3.ZERO, float(a["wait"])])
 		"look":
 			for i in 25:
 				await get_tree().physics_frame
@@ -2204,9 +2222,6 @@ func _draw_fx() -> void:
 		fx.draw_circle(mouse, 3.5, Color(1, 1, 1, 0.95))
 		fx.draw_arc(mouse, 11.0, 0, TAU, 24, Color(UI.ACCENT if on else Color.WHITE, 0.9), 2.5)
 		fx.draw_arc(mouse, 12.5, 0, TAU, 24, Color(UI.INK, 0.35), 1.0)
-	elif not bag_open:
-		var vs := fx.size
-		fx.draw_string(Data.font_bold, Vector2(0, vs.y * 0.42), "화면을 클릭하면 마우스로 시점을 돌려요  ([Tab] 가방 · Esc 커서)", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 26, Color(UI.INK, 0.85))
 	if not tearing:
 		if not aim.is_empty() and not aim.get("bolted", false):
 			_draw_hand(mouse + Vector2(28, 30), 0.85, 0.0, 0.0)
