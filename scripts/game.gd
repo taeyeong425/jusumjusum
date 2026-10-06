@@ -13,6 +13,7 @@ var autotest := false
 
 var round_i := 1
 var target: Dictionary
+var theme := "school"           # 이번 라운드 공간 (Themes.ORDER)
 var formation := "풍족"
 var counts: Dictionary
 var quota: Array
@@ -61,7 +62,14 @@ func new_game() -> void:
 
 
 func _setup_round() -> void:
-	var tpls := Data.targets()
+	theme = Themes.ORDER[(round_i - 1) % Themes.ORDER.size()]
+	var ft := ""
+	for s in OS.get_cmdline_user_args():
+		if s.begins_with("--theme="):
+			ft = s.substr(8)
+	if ft != "":
+		theme = ft   # 테스트: 특정 공간으로 바로
+	var tpls := Themes.targets_for(theme)
 	var prev: String = target.get("name", "") if target else ""
 	var pick: Dictionary = tpls[rng.randi() % tpls.size()]
 	while pick["name"] == prev:
@@ -75,6 +83,8 @@ func _setup_round() -> void:
 	var cards := Data.cards()
 	for p in players:
 		p["inventory"] = []
+		p["envelopes"] = []
+		p["hunt"] = {"gold": 0, "hidden": 0, "up": 0, "found": 0}
 		p["work"] = []
 		p["edits"] = 0
 		p["card"] = cards[rng.randi() % cards.size()]

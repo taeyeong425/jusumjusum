@@ -4,7 +4,7 @@ extends Node
 const PHASES := {
 	"menu": "res://scripts/phases/menu.gd",
 	"reveal": "res://scripts/phases/reveal.gd",
-	"collect": "res://scripts/phases/collect.gd",
+	"collect": "res://scripts/phases/hunt.gd",   # v0.6: 놀이터 뜯기 → 테마 공간 보물찾기
 	"build": "res://scripts/phases/build.gd",
 	"exhibit": "res://scripts/phases/exhibit.gd",
 	"settle": "res://scripts/phases/settle.gd",
@@ -31,14 +31,27 @@ func _ready() -> void:
 	elif _arg("--scenario=") != "":
 		var sc := _arg("--scenario=")
 		Game.new_game()
-		if sc == "build":
+		if sc == "ceremony":
+			var tiers := ["note", "env", "gold", "note", "env", "note", "note"]
+			for tr in tiers:
+				var parts := []
+				for k in Themes.TIERS[tr][2]:
+					parts.append(Themes.make_part(Game.theme, Data.TYPES[Game.rng.randi() % 12], Game.rng))
+				Game.human()["envelopes"].append({"tier": tr, "name": Themes.TIERS[tr][0], "parts": parts})
+			goto("build")
+			await get_tree().create_timer(0.6).timeout
+			for k in 3:
+				current.call("_open_next")
+				await get_tree().create_timer(0.3).timeout
+		elif sc == "build":
 			for p in Game.players:
 				for k in 12:
 					p["inventory"].append(Data.make_item("box", Vector3.ONE, 2 + k % 6, "auto"))
 			goto("build")
 		else:
 			goto("collect")
-		current.call("run_scenario", sc)
+		if sc != "ceremony":
+			current.call("run_scenario", sc)
 	elif Game.autotest:
 		Game.new_game()
 		goto("reveal")

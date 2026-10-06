@@ -21,7 +21,7 @@ func _ready() -> void:
 	# 카드 · 티켓
 	var me: Dictionary = Game.human()
 	var card: Dictionary = me["card"]
-	var c_ok := Judge.card_constraint(card, me["work"], me["inventory"].size())
+	var c_ok := Judge.card_constraint(card, me["work"], me["inventory"].size(), me.get("hunt", {}))
 	var r_ok := Judge.card_rank_ok(card["rank"], 0, avg)
 	me["card_done"] = c_ok and r_ok
 	var gained := 0

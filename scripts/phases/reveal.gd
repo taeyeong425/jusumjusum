@@ -22,7 +22,8 @@ func _ready() -> void:
 	var chalk := Color("#F4F1E6")
 	var top := UI.hbox(20)
 	col.add_child(top)
-	top.add_child(UI.label("%d라운드 · 오늘의 과제" % Game.round_i, 34, Color(chalk, 0.8)))
+	var th: Dictionary = Themes.INFO[Game.theme]
+	top.add_child(UI.label("%d라운드 · 보물찾기 장소: %s" % [Game.round_i, th["name"]], 34, Color(chalk, 0.9), true))
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(sp)
@@ -32,6 +33,9 @@ func _ready() -> void:
 	var tgt := UI.label("「%s」를 만들어라" % Game.target["name"], 88, chalk, true)
 	tgt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(tgt)
+	var how := UI.label("%s — 쪽지 · 편지봉투 · 금봉투를 찾아라 (모두 %d개). 봉투 속 파츠로 만든다" % [th["desc"], Themes.treasure_count(Game.PLAYERS)], 22, Color(chalk, 0.85))
+	how.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(how)
 
 	var row := UI.hbox(24)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL

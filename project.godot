@@ -32,3 +32,14 @@ theme/default_font_antialiasing=1
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 anti_aliasing/quality/msaa_3d=1
+
+[shader_globals]
+
+seethru_pos={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+seethru_on={
+"type": "float",
+"value": 0.0
+}

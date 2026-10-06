@@ -9,6 +9,10 @@ uniform float studs = 1.0;
 uniform float pitch = 0.25;
 uniform float gloss = 0.3;
 
+// 보물찾기: 캐릭터 앞을 가리는 벽 · 가구에 구멍을 뚫어 늘 보이게 (화면에서 캐릭터 주변 원)
+global uniform vec3 seethru_pos;
+global uniform float seethru_on;
+
 varying vec3 wpos;
 varying vec3 wnorm;
 
@@ -18,6 +22,21 @@ void vertex() {
 }
 
 void fragment() {
+	if (seethru_on > 0.5) {
+		vec4 pv = VIEW_MATRIX * vec4(seethru_pos, 1.0);
+		vec4 pp = PROJECTION_MATRIX * pv;
+		vec4 fp = PROJECTION_MATRIX * vec4(VERTEX, 1.0);
+		float aspect = VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
+		vec2 dd = (fp.xy / fp.w - pp.xy / pp.w) * vec2(aspect, 1.0);
+		float r = length(dd);
+		if (-VERTEX.z < -pv.z - 0.8) {
+			float edge = smoothstep(0.3, 0.44, r);
+			float n = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
+			if (n > edge) {
+				discard;
+			}
+		}
+	}
 	vec3 col = albedo.rgb;
 	vec3 ay = normalize(MODEL_MATRIX[1].xyz);
 	float up = dot(normalize(wnorm), ay);

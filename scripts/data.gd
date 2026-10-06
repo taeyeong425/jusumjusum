@@ -122,11 +122,11 @@ static func mesh(t: String) -> Mesh:
 		"ring":
 			var r := TorusMesh.new(); r.inner_radius = 0.17; r.outer_radius = 0.3; r.rings = 22; r.ring_segments = 9; m = r
 		"box":
-			var b := BoxMesh.new(); b.size = Vector3(0.5, 0.5, 0.5); m = b
+			m = rounded_box(Vector3(0.5, 0.5, 0.5), 0.07)   # v0.6: 둥근 모서리
 		"rod":
-			var b := BoxMesh.new(); b.size = Vector3(0.12, 0.9, 0.12); m = b
+			m = rounded_box(Vector3(0.12, 0.9, 0.12), 0.04)
 		"plate":
-			var b := BoxMesh.new(); b.size = Vector3(0.7, 0.06, 0.5); m = b
+			m = rounded_box(Vector3(0.7, 0.06, 0.5), 0.025)
 		"wedge":
 			var p := PrismMesh.new(); p.size = Vector3(0.5, 0.5, 0.5); p.left_to_right = 0.0; m = p
 		"potato":
@@ -529,10 +529,11 @@ static func pick_formation(round_i: int, rng: RandomNumberGenerator) -> String:
 static func cards() -> Array:
 	# v0.5: 모으기 · 만들기와 이어지는 조건. 성공하면 전체 등수 +0.5점 · 방 티켓 +1. 등수 조건은 없앴다
 	return [
-		{"id": "train", "name": "기차 도둑", "desc": "기차에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
-		{"id": "car", "name": "자동차 정비공", "desc": "자동차에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
-		{"id": "play", "name": "놀이터 지킴이", "desc": "놀이기구에서 뜯은 덩어리 2개 이상 써서", "rank": ""},
-		{"id": "sand", "name": "보물찾기", "desc": "모래밭에서 파낸 덩어리를 1개 이상 써서", "rank": ""},
+		# v0.6 보물찾기 카드 (찾는 동안의 기록으로 판정)
+		{"id": "gold", "name": "황금 손", "desc": "금봉투를 1개 이상 찾고", "rank": ""},
+		{"id": "hidden", "name": "뒤지기 장인", "desc": "가구 속 봉투를 3개 이상 찾고", "rank": ""},
+		{"id": "up", "name": "높은 곳 탐험가", "desc": "위층에서 봉투를 2개 이상 찾고", "rank": ""},
+		{"id": "many", "name": "싹쓸이", "desc": "봉투를 8개 이상 찾고", "rank": ""},
 		{"id": "rainbow", "name": "알록달록", "desc": "4가지 색 이상 써서", "rank": ""},
 		{"id": "duo", "name": "깔맞춤", "desc": "2가지 색 이하로", "rank": ""},
 		{"id": "tall", "name": "고층 건물", "desc": "높이 1.5 이상으로", "rank": ""},
@@ -607,3 +608,43 @@ static func plain_material(ci: int, studs := true) -> Material:
 		m.next_pass = null
 		_plain[key] = m
 	return _plain[key]
+
+
+## 모서리를 둥글게 깎은 상자 (조잡한 느낌 줄이기). 반지름 r은 가장 짧은 변 기준
+static func rounded_box(size: Vector3, rr: float) -> Mesh:
+	var e := size * 0.5
+	var r := minf(rr, minf(e.x, minf(e.y, e.z)) * 0.95)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var core := e - Vector3.ONE * r
+	var coords := func(h: float) -> Array:
+		return [-h, -h + r, h - r, h]   # 모서리 한 번 깎기 (가볍게 — 웹 성능)
+	for ax in 3:
+		for sgn in [-1.0, 1.0]:
+			var u := (ax + 1) % 3
+			var v := (ax + 2) % 3
+			var cu: Array = coords.call(e[u])
+			var cv: Array = coords.call(e[v])
+			var grid := []
+			for i in cu.size():
+				var row := []
+				for j in cv.size():
+					var p := Vector3.ZERO
+					p[ax] = e[ax] * sgn
+					p[u] = cu[i]
+					p[v] = cv[j]
+					var c := p.clamp(-core, core)
+					var d := p - c
+					var n := d.normalized() if d.length() > 0.00001 else Vector3.ZERO
+					if n == Vector3.ZERO:
+						n[ax] = sgn
+					row.append([c + n * r, n])
+				grid.append(row)
+			for i in cu.size() - 1:
+				for j in cv.size() - 1:
+					var q := [grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]]
+					var order := [0, 2, 1, 0, 3, 2] if sgn > 0 else [0, 1, 2, 0, 2, 3]
+					for k in order:
+						st.set_normal(q[k][1])
+						st.add_vertex(q[k][0])
+	return st.commit()

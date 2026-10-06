@@ -359,3 +359,25 @@ static func primary(text: String, cb: Callable, size := 26) -> Button:
 		b.add_theme_color_override(c, Color.WHITE)
 	b.add_theme_font_override("font", Data.font_bold)
 	return b
+
+
+## 봉투 아이콘 (쪽지 · 편지봉투 · 금봉투)
+static func draw_envelope(c: CanvasItem, r: Rect2, tier: String) -> void:
+	var col := Color("#FFFDF7") if tier == "note" else (Color("#F2C94C") if tier == "gold" else Color("#F4B6C2"))
+	var ink := Color(INK, 0.8)
+	var rr := Rect2(r.position + Vector2(0, r.size.y * 0.15), Vector2(r.size.x, r.size.y * 0.7))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(3)
+	sb.border_color = ink
+	sb.set_border_width_all(1)
+	c.draw_style_box(sb, rr)
+	if tier == "note":
+		for k in 3:
+			var y := rr.position.y + rr.size.y * (0.3 + k * 0.2)
+			c.draw_line(Vector2(rr.position.x + 5, y), Vector2(rr.end.x - 5 - k * 4, y), Color("#9AA5AF"), 1.5)
+	else:
+		c.draw_polyline(PackedVector2Array([rr.position, Vector2(rr.get_center().x, rr.position.y + rr.size.y * 0.55), Vector2(rr.end.x, rr.position.y)]), ink, 1.5)
+		c.draw_circle(Vector2(rr.get_center().x, rr.position.y + rr.size.y * 0.55), 3.5, Color("#C0392B") if tier == "env" else Color("#0A3463"))
+	if tier == "gold":
+		c.draw_string(Data.font_bold, rr.position + Vector2(rr.size.x - 12, 2), "★", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#B07800"))

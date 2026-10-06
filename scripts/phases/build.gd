@@ -72,6 +72,7 @@ func _ready() -> void:
 	_build_hud()
 	_refresh_tray()
 	_update_cam(1.0)
+	_open_ceremony()
 	if Game.autotest:
 		var w := BotBuilder.build(Game.target, inventory, 0.75, Game.rng)
 		for d in w:
@@ -877,6 +878,16 @@ func _press(pos: Vector2) -> void:
 
 
 func _key(k: InputEventKey) -> void:
+	if ceremony:
+		match k.physical_keycode:
+			KEY_SPACE: _open_next()
+			KEY_A:
+				for i in 30:
+					_open_next()
+			KEY_ENTER, KEY_KP_ENTER:
+				if cer_envs.is_empty():
+					_close_ceremony()
+		return
 	var ctrl := k.ctrl_pressed or k.meta_pressed
 	match k.physical_keycode:
 		KEY_Q: _turn(-PI / 4)
@@ -914,7 +925,8 @@ func _update_cam(f: float) -> void:
 func _process(delta: float) -> void:
 	if finished:
 		return
-	time_left -= delta
+	if ceremony == null:
+		time_left -= delta   # 개봉식 동안엔 시간이 안 간다
 	if spin:
 		yaw_t += delta * 0.9
 	_update_cam(1.0 - exp(-10.0 * delta))
@@ -934,7 +946,7 @@ func _process(delta: float) -> void:
 	hud_time.add_theme_color_override("font_color", UI.BAD if time_left < 30 else UI.INK)
 	var dicts := _dicts()
 	var card: Dictionary = Game.human()["card"]
-	var ok := Judge.card_constraint(card, dicts, inventory.size())
+	var ok := Judge.card_constraint(card, dicts, inventory.size(), Game.human().get("hunt", {}))
 	hud_card.text = "카드 조건 충족! (+0.5점)" if ok else "카드 조건 아직 (덩어리 3개 이상 + 조건)"
 	hud_card.add_theme_color_override("font_color", UI.GOOD if ok else UI.SOFT)
 	spin_btn.text = "멈추기" if spin else "돌려보기"
@@ -1008,3 +1020,128 @@ func run_scenario(_sc: String) -> void:
 	b2.free()
 	print("[scenario] done")
 	get_tree().quit()
+
+
+# ── 봉투 개봉식 (v0.6 보물찾기) ──────────────────────
+# 찾아온 봉투를 조립 시작 때 한꺼번에 연다. 열린 파츠는 바로 「모은 덩어리」에 들어간다. 이 동안 시간은 안 간다.
+
+var ceremony: CanvasLayer
+var cer_envs: Array = []
+var cer_row: HFlowContainer
+var cer_parts: HFlowContainer
+var cer_note: Label
+var cer_btn: Button
+
+
+func _open_ceremony() -> void:
+	cer_envs = Game.human()["envelopes"]
+	if cer_envs.is_empty():
+		return
+	ceremony = CanvasLayer.new()
+	ceremony.layer = 5
+	add_child(ceremony)
+	var dim := ColorRect.new()
+	dim.color = Color(0.1, 0.13, 0.16, 0.72)
+	ceremony.add_child(UI.full(dim))
+	var p := UI.panel()
+	p.custom_minimum_size = Vector2(860, 0)
+	var v := UI.vbox(10)
+	p.add_child(v)
+	var t := UI.label("봉투 개봉식!", 40, UI.INK, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	cer_note = UI.label("봉투를 눌러서 열어요 · Space = 하나씩 · A = 모두 열기", 20, UI.SOFT)
+	cer_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(cer_note)
+	cer_row = HFlowContainer.new()
+	cer_row.alignment = FlowContainer.ALIGNMENT_CENTER
+	cer_row.add_theme_constant_override("h_separation", 10)
+	cer_row.add_theme_constant_override("v_separation", 10)
+	v.add_child(cer_row)
+	for i in cer_envs.size():
+		var env: Dictionary = cer_envs[i]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(78, 70)
+		b.focus_mode = Control.FOCUS_NONE
+		UI.tile_button(b)
+		var icon := Control.new()
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.position = Vector2(8, 8)
+		icon.size = Vector2(62, 54)
+		var tier: String = env["tier"]
+		icon.draw.connect(func(): UI.draw_envelope(icon, Rect2(Vector2.ZERO, icon.size), tier))
+		b.add_child(icon)
+		b.tooltip_text = env["name"]
+		b.pressed.connect(func(): _open_env(b, env))
+		cer_row.add_child(b)
+	var sep := HSeparator.new()
+	v.add_child(sep)
+	v.add_child(UI.label("나온 파츠", 20, UI.INK, true))
+	cer_parts = HFlowContainer.new()
+	cer_parts.add_theme_constant_override("h_separation", 8)
+	cer_parts.add_theme_constant_override("v_separation", 8)
+	cer_parts.custom_minimum_size = Vector2(0, 90)
+	v.add_child(cer_parts)
+	cer_btn = UI.primary("조립 시작 →", _close_ceremony, 24)
+	cer_btn.visible = false
+	var hb := UI.hbox(10)
+	hb.alignment = BoxContainer.ALIGNMENT_CENTER
+	hb.add_child(cer_btn)
+	v.add_child(hb)
+	ceremony.add_child(p)
+	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+
+func _open_env(b: Button, env: Dictionary) -> void:
+	if not is_instance_valid(b) or b.disabled:
+		return
+	b.disabled = true
+	var tw := create_tween()
+	b.pivot_offset = b.size * 0.5
+	tw.tween_property(b, "scale", Vector2(1.25, 1.25), 0.08)
+	tw.tween_property(b, "scale", Vector2(0.0, 0.0), 0.16)
+	tw.tween_callback(b.queue_free)
+	UI.sfx("star" if env["tier"] == "gold" else "pick", -6.0)
+	for it in env["parts"]:
+		inventory.append(it)
+		var cell := Control.new()
+		cell.custom_minimum_size = Vector2(96, 86)
+		var item: Dictionary = it
+		cell.draw.connect(func():
+			cell.draw_style_box(_cer_box(), Rect2(Vector2.ZERO, cell.size))
+			UI.draw_chunk_icon(cell, item, Rect2(Vector2(22, 6), Vector2(52, 50)))
+			cell.draw_string(Data.font_regular, Vector2(0, 76), item["name"], HORIZONTAL_ALIGNMENT_CENTER, cell.size.x, 15, UI.INK))
+		cell.scale = Vector2(0.2, 0.2)
+		cer_parts.add_child(cell)
+		var ct := create_tween()
+		ct.tween_property(cell, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	cer_envs.erase(env)
+	_refresh_tray()
+	if cer_envs.is_empty():
+		cer_note.text = "다 열었다! 파츠 %d개" % inventory.size()
+		cer_btn.visible = true
+
+
+var _cer_sb: StyleBoxFlat
+func _cer_box() -> StyleBoxFlat:
+	if _cer_sb == null:
+		_cer_sb = StyleBoxFlat.new()
+		_cer_sb.bg_color = Color("#F3F5F7")
+		_cer_sb.set_corner_radius_all(8)
+	return _cer_sb
+
+
+func _open_next() -> void:
+	for b in cer_row.get_children():
+		if b is Button and not (b as Button).disabled:
+			(b as Button).pressed.emit()
+			return
+
+
+func _close_ceremony() -> void:
+	if ceremony:
+		ceremony.queue_free()
+		ceremony = null
+	Game.human()["envelopes"] = []

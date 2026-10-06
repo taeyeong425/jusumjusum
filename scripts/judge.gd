@@ -241,10 +241,15 @@ static func quota_pass(avg: Array, quota: Array) -> Dictionary:
 # ── 카드 ─────────────────────────────────────────────
 
 ## 제약 부분만 (조립 중 실시간 표시에 쓴다)
-static func card_constraint(card: Dictionary, work: Array, inventory_size: int) -> bool:
+static func card_constraint(card: Dictionary, work: Array, inventory_size: int, hunt: Dictionary = {}) -> bool:
 	var n := work.size()
 	if n < 3:
 		return false
+	match card["id"]:
+		"gold": return int(hunt.get("gold", 0)) >= 1
+		"hidden": return int(hunt.get("hidden", 0)) >= 3
+		"up": return int(hunt.get("up", 0)) >= 2
+		"many": return int(hunt.get("found", 0)) >= 8
 	var src_n := func(s: String) -> int:
 		var c := 0
 		for d in work:
