@@ -46,6 +46,7 @@ var spin_btn: Button
 var warn: Label
 var warn_t := 0.0
 var title_edit: LineEdit
+var placing := false          # 목록에서 꺼낸 덩어리를 들고 있는 중
 var guides: Array = []        # 맞춤 안내선 [월드 a, 월드 b]
 var snap_note := ""
 var snap_t := 0.0
@@ -447,6 +448,13 @@ func _spawn(inv_i: int, from: Dictionary = {}) -> Piece:
 	_select(p)
 	_refresh_tray()
 	UI.sfx("place", -4.0)
+	# 들고 오기: 커서를 따라오다가 클릭한 곳에 놓인다 (빌드 게임식)
+	if from.is_empty() and not Game.autotest:
+		placing = true
+		mode = "move"
+		pushed = true
+		grab_off = Vector3.ZERO
+		_note("클릭해서 놓기 · 휠 = 높이")
 	return p
 
 
@@ -1017,6 +1025,11 @@ func _input(event: InputEvent) -> void:
 
 func _press(pos: Vector2) -> void:
 	press_pos = pos
+	if placing:
+		placing = false
+		mode = ""
+		UI.sfx("place", -6.0)
+		return
 	var hd := _handle_at(pos)
 	if hd != "":
 		_push_undo()

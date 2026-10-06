@@ -5,6 +5,9 @@ var left := 20.0
 var timer_label: Label
 
 
+var model: Node3D
+
+
 func _ready() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -35,11 +38,44 @@ func _ready() -> void:
 	col.add_child(tgt)
 	var how := UI.label("%s — 쪽지 · 편지봉투 · 금봉투를 찾아라 (모두 %d개). 봉투 속 파츠로 만든다" % [th["desc"], Themes.treasure_count(Game.PLAYERS)], 22, Color(chalk, 0.85))
 	how.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	how.custom_minimum_size.x = 900
 	col.add_child(how)
 
 	var row := UI.hbox(24)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(row)
+
+	# 만들 것 견본 (3D, 천천히 돈다)
+	var svc := SubViewportContainer.new()
+	svc.custom_minimum_size = Vector2(280, 280)
+	svc.stretch = true
+	row.add_child(svc)
+	var sv := SubViewport.new()
+	sv.own_world_3d = true
+	sv.transparent_bg = true
+	svc.add_child(sv)
+	var w3 := Node3D.new()
+	sv.add_child(w3)
+	UI.make_env(w3, Color(0, 0, 0, 0))
+	var inv := []
+	for t in Data.TYPES:
+		for v in Data.VARIANTS[t]:
+			inv.append(Data.make_item(t, v[1], 0, "auto"))
+	model = Node3D.new()
+	w3.add_child(model)
+	var mrng := RandomNumberGenerator.new()
+	mrng.seed = 7
+	for d in BotBuilder.build(Game.target, inv, 1.0, mrng):
+		model.add_child(Piece.from_dict(d, false))
+	var mcam := Camera3D.new()
+	mcam.fov = 40
+	w3.add_child(mcam)
+	mcam.look_at_from_position(Vector3(0, 1.3, 3.0), Vector3(0, 0.6, 0))
+	mcam.current = true
+	var ml := DirectionalLight3D.new()
+	ml.rotation_degrees = Vector3(-40, 30, 0)
+	w3.add_child(ml)
 
 	# 편성
 	var fp := UI.panel()
@@ -79,7 +115,8 @@ func _ready() -> void:
 	qp.add_child(qv)
 	qv.add_child(UI.label("할당량", 26, UI.SOFT))
 	qv.add_child(UI.label("★%.1f 이상이 %d명" % [Game.quota[0], Game.quota[1]], 44, UI.INK, true))
-	qv.add_child(UI.label("6명 중 %d명이 넘으면 다 같이 다음 라운드로" % Game.quota[1], 22, UI.SOFT))
+	var ql := UI.label("6명 중 %d명이 넘으면 할당량 통과\n(3라운드는 무조건 진행)" % Game.quota[1], 20, UI.SOFT)
+	qv.add_child(ql)
 
 	var card: Dictionary = Game.human()["card"]
 	var cp := UI.panel()
@@ -88,17 +125,19 @@ func _ready() -> void:
 	cp.add_child(cv)
 	cv.add_child(UI.label("내 비밀 카드", 26, UI.SOFT))
 	cv.add_child(UI.label("「%s」" % card["name"], 38, UI.ACCENT, true))
-	cv.add_child(UI.label("%s  → 성공하면 전체 등수 +0.5점" % card["desc"], 24))
+	cv.add_child(UI.label("%s\n→ 성공하면 전체 등수 +0.5점" % card["desc"], 22))
 	cv.add_child(UI.label("달성하면 티켓 1장. 티켓 3장 = 할당량 한 단계 낮추기", 20, UI.SOFT))
 	cv.add_child(UI.label("방 전체 티켓: %d장" % Game.tickets, 22, UI.SOFT))
 
-	var go := UI.primary("놀이터로 →  [Enter]", _go, 30)
+	var go := UI.primary("보물찾기 시작 →  [Enter]", _go, 30)
 	var cc := CenterContainer.new()
 	cc.add_child(go)
 	col.add_child(cc)
 
 
 func _process(delta: float) -> void:
+	if model:
+		model.rotation.y += delta * 0.7
 	left -= delta * (40.0 if Game.autotest else 1.0)
 	timer_label.text = UI.clock(left)
 	if left <= 0:
