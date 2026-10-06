@@ -41,7 +41,8 @@ func _ready() -> void:
 			for d in rec["works"][i]:
 				holder.add_child(Piece.from_dict(d, false))
 			var nm: String = "나" if i == 0 else Game.players[i]["name"]
-			var l := UI.label3d("%s ★%.1f" % [nm, rec["avg"][i]], 26)
+			var tl: String = str(rec["titles"][i]) if rec.get("titles", []).size() > i else "무제"
+			var l := UI.label3d("「%s」\n%s ★%.1f" % [tl, nm, rec["avg"][i]], 24)
 			l.position = Vector3(px, 2.35, 0.4)
 			add_child(l)
 		x += rec["works"].size() * 2.0 + 3.0

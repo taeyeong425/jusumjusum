@@ -189,8 +189,11 @@ func _store_history() -> void:
 	var cards := []
 	for p in Game.players:
 		cards.append(p.get("card_done", false))
+	var titles := []
+	for p in Game.players:
+		titles.append(p.get("title", "무제"))
 	var rec := {"round": Game.round_i, "target": Game.target["name"], "works": works,
-		"avg": result["avg"], "pass": verdict["pass"], "cards": cards}
+		"avg": result["avg"], "pass": verdict["pass"], "cards": cards, "titles": titles, "theme": Game.theme}
 	if Game.history.size() >= Game.round_i:
 		Game.history[Game.round_i - 1] = rec
 	else:

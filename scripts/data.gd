@@ -317,12 +317,13 @@ static func collision_points(t: String) -> PackedVector3Array:
 
 
 ## 덩어리 재질 — 레고 같은 반짝이는 플라스틱. studs = 윗면 스터드 (각진 것 · 원기둥)
-static func material(ci: int, alpha := 1.0, studs := true) -> Material:
-	var key := "%d_%.2f_%s" % [ci, alpha, studs]
+static func material(ci: int, alpha := 1.0, studs := true, finish := 0) -> Material:
+	var key := "%d_%.2f_%s_%d" % [ci, alpha, studs, finish]
 	if _mats.has(key):
 		return _mats[key]
 	if alpha >= 1.0:
 		var bm := brick(color(ci), studs)
+		bm.set_shader_parameter("finish", finish)
 		bm.next_pass = outline_material()
 		_mats[key] = bm
 		return bm
@@ -355,6 +356,9 @@ static func brick(c: Color, studs := true, pitch := 0.25, gloss := 0.3) -> Shade
 ## 윗면에 스터드가 있는 종류 (레고 브릭 · 플레이트 · 둥근 브릭)
 ## v0.5: 스터드(레고 돌기) 끔 — "조립이 레고 방식이 아닌데 그래픽만 레고일 필요가 없다". 셰이더는 남겨 둠
 const STUDS := false
+
+## 마감 재질 이름 (조립 · 전시)
+const FINISHES := ["플라스틱", "대리석", "청동", "나무", "금"]
 
 static func has_studs(t: String) -> bool:
 	return STUDS and t in ["box", "plate", "rod", "cylinder"]
@@ -601,10 +605,10 @@ static func rust_material() -> StandardMaterial3D:
 
 static var _plain := {}
 ## 외곽선 없는 같은 색 재질 (아주 크게 키운 덩어리용)
-static func plain_material(ci: int, studs := true) -> Material:
-	var key := "%d_%s" % [ci, studs]
+static func plain_material(ci: int, studs := true, finish := 0) -> Material:
+	var key := "%d_%s_%d" % [ci, studs, finish]
 	if not _plain.has(key):
-		var m: Material = material(ci, 1.0, studs).duplicate()
+		var m: Material = material(ci, 1.0, studs, finish).duplicate()
 		m.next_pass = null
 		_plain[key] = m
 	return _plain[key]

@@ -11,6 +11,7 @@ var type := "box"
 var shape := Vector3.ONE
 var size := 1.0
 var stretch := Vector3.ONE   # 축별 늘이기 (v0.5 — 비율을 바꿀 수 있다)
+var finish := 0               # 마감 재질 (Data.FINISHES)
 var pscale := Vector3.ONE
 var color_idx := 0
 var origin := "ground"
@@ -82,7 +83,12 @@ func set_pscale(s: Vector3, clamp := true) -> void:
 
 func _mat() -> Material:
 	var st := Data.has_studs(type)
-	return Data.plain_material(color_idx, st) if big else Data.material(color_idx, 1.0, st)
+	return Data.plain_material(color_idx, st, finish) if big else Data.material(color_idx, 1.0, st, finish)
+
+
+func set_finish(f: int) -> void:
+	finish = f
+	mesh_inst.material_override = _mat()
 
 
 func set_color(ci: int) -> void:
@@ -113,7 +119,7 @@ func world_half_extents() -> Vector3:
 
 
 func to_dict() -> Dictionary:
-	return {"t": type, "p": position, "r": quaternion, "s": pscale, "sh": shape, "k": size, "st": stretch, "src": src,
+	return {"t": type, "p": position, "r": quaternion, "s": pscale, "sh": shape, "k": size, "st": stretch, "src": src, "f": finish,
 		"c": color_idx, "o": origin, "i": inv_index}
 
 
@@ -124,6 +130,9 @@ static func from_dict(d: Dictionary, collide := true) -> Piece:
 	p.quaternion = d["r"]
 	p.size = d.get("k", 1.0)
 	p.stretch = d.get("st", Vector3.ONE)
+	p.finish = int(d.get("f", 0))
+	if p.finish != 0:
+		p.mesh_inst.material_override = p._mat()
 	p.set_pscale(d["s"])
 	p.origin = d.get("o", "ground")
 	p.src = d.get("src", "")

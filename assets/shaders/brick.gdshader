@@ -8,6 +8,7 @@ uniform vec3 emission : source_color = vec3(0.0);
 uniform float studs = 1.0;
 uniform float pitch = 0.25;
 uniform float gloss = 0.3;
+uniform int finish = 0;    // 마감: 0 플라스틱 · 1 대리석 · 2 청동 · 3 나무 · 4 금 (조립 · 전시)
 
 // 보물찾기: 캐릭터 앞을 가리는 벽 · 가구에 구멍을 뚫어 늘 보이게 (화면에서 캐릭터 주변 원)
 global uniform vec3 seethru_pos;
@@ -15,6 +16,7 @@ global uniform float seethru_on;
 
 varying vec3 wpos;
 varying vec3 wnorm;
+varying vec3 lpos;
 
 float hsh(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float vnoise(vec3 p) {
@@ -26,6 +28,7 @@ float vnoise(vec3 p) {
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnorm = normalize(mat3(MODEL_MATRIX) * NORMAL);
+	lpos = VERTEX;
 }
 
 void fragment() {
@@ -73,6 +76,25 @@ void fragment() {
 	col *= 0.93 + 0.1 * nz;
 	ALBEDO = col;
 	ROUGHNESS = gloss + (nz - 0.5) * 0.15;
+	if (finish == 1) {
+		float v = vnoise(lpos * 9.0) * 0.6 + vnoise(lpos * 25.0) * 0.4;
+		float vein = smoothstep(0.06, 0.0, abs(sin((lpos.x + lpos.y * 0.7 + lpos.z * 0.3) * 14.0 + v * 8.0)));
+		vec3 base = vec3(0.93, 0.92, 0.89) * mix(vec3(1.0), albedo.rgb, 0.22);
+		ALBEDO = mix(base, base * 0.55, vein * 0.7);
+		ROUGHNESS = 0.18;
+	} else if (finish == 2) {
+		ALBEDO = mix(vec3(0.55, 0.36, 0.18), albedo.rgb * 0.5, 0.15) * (0.8 + 0.3 * nz);
+		METALLIC = 0.85;
+		ROUGHNESS = 0.32;
+	} else if (finish == 3) {
+		float rings = sin(length(lpos.xz) * 70.0 + vnoise(lpos * 6.0) * 6.0) * 0.5 + 0.5;
+		ALBEDO = mix(vec3(0.58, 0.38, 0.21), vec3(0.42, 0.26, 0.13), rings) * mix(vec3(1.0), albedo.rgb, 0.18);
+		ROUGHNESS = 0.6;
+	} else if (finish == 4) {
+		ALBEDO = vec3(0.95, 0.74, 0.3) * (0.85 + 0.2 * nz);
+		METALLIC = 1.0;
+		ROUGHNESS = 0.22;
+	}
 	SPECULAR = 0.6;
 	EMISSION = emission;
 }

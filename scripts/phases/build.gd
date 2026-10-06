@@ -45,6 +45,7 @@ var hud_sel: Label
 var spin_btn: Button
 var warn: Label
 var warn_t := 0.0
+var title_edit: LineEdit
 var guides: Array = []        # 맞춤 안내선 [월드 a, 월드 b]
 var snap_note := ""
 var snap_t := 0.0
@@ -82,16 +83,23 @@ func _ready() -> void:
 
 
 func _build_room() -> void:
+	# 조각가의 작업실: 나무 바닥 · ㄱ자 벽(판벽 · 창문) · 선반 · 이젤 · 점토 통 · 받침대(위가 작업대) · 스포트라이트
 	var fl := MeshInstance3D.new()
 	var fm := PlaneMesh.new(); fm.size = Vector2(30, 30)
 	fl.mesh = fm
 	fl.position.y = -0.9
-	fl.material_override = Data.brick(Color("#DCE3E8"), false, 0.25, 0.7)
+	var flm := ShaderMaterial.new()
+	flm.shader = load("res://assets/shaders/floor.gdshader")
+	flm.set_shader_parameter("style", 0)
+	flm.set_shader_parameter("col_a", Color("#B98A5E"))
+	flm.set_shader_parameter("col_b", Color("#A47750"))
+	flm.set_shader_parameter("scale", 0.5)
+	fl.material_override = flm
 	add_child(fl)
-	var top := Piece.new().setup("box", 13, false)
-	top.set_pscale(Vector3(TABLE * 2 / 0.5, 0.4, TABLE * 2 / 0.5), false)
-	top.position.y = -0.1
-	add_child(top)
+	# 받침대 (흰 좌대) + 검은 펠트 윗면 = 작업대
+	_rb(Vector3(0, -0.5, 0), Vector3(TABLE * 2 + 0.1, 0.8, TABLE * 2 + 0.1), Color("#F1EEE8"), 0.03)
+	_rb(Vector3(0, -0.06, 0), Vector3(TABLE * 2 + 0.16, 0.12, TABLE * 2 + 0.16), Color("#2E2B29"), 0.02)
+	_rb(Vector3(0, -0.88, 0), Vector3(TABLE * 2 + 0.3, 0.06, TABLE * 2 + 0.3), Color("#D9D4CB"), 0.02)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	var cs := CollisionShape3D.new()
@@ -101,17 +109,86 @@ func _build_room() -> void:
 	cs.position.y = -0.1
 	body.add_child(cs)
 	add_child(body)
-	for x in [-1, 1]:
-		for z in [-1, 1]:
-			var leg := Piece.new().setup("box", 12, false, Data.variant("box", 2)[1])
-			leg.set_pscale(Data.variant("box", 2)[1] * 1.4, false)
-			leg.position = Vector3(x * (TABLE - 0.2), -0.75, z * (TABLE - 0.2))
-			add_child(leg)
-	var front := UI.label3d("정면", 40, UI.SOFT)
+	var front := UI.label3d("정면", 28, Color("#E9E2D6"))
 	front.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	front.rotation_degrees = Vector3(-90, 0, 0)
-	front.position = Vector3(0, 0.005, TABLE - 0.25)
+	front.position = Vector3(0, 0.005, TABLE - 0.18)
 	add_child(front)
+	# 벽 둘 (뒤 · 왼쪽) — 판벽 · 몰딩 · 창문
+	var wc := Color("#EDE6DA")
+	for w in [[Vector3(0, 1.6, -6.0), Vector3(14, 5.0, 0.2)], [Vector3(-6.0, 1.6, 0), Vector3(0.2, 5.0, 14)]]:
+		_rb(w[0], w[1], wc, 0.0)
+		var low: Vector3 = w[0] - Vector3(0, 1.8, 0)
+		var lsz: Vector3 = w[1]
+		var off := Vector3(0, 0, 0.11) if lsz.x > 1 else Vector3(0.11, 0, 0)
+		_rb(low + off, Vector3(lsz.x if lsz.x > 1 else 0.03, 1.4, lsz.z if lsz.z > 1 else 0.03), wc.darkened(0.15), 0.0)
+	var glass := StandardMaterial3D.new()
+	glass.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glass.albedo_color = Color("#DDEFF8")
+	for wx in [-2.5, 2.5]:
+		var g := MeshInstance3D.new()
+		g.mesh = _box_mesh(Vector3(2.0, 2.0, 0.02))
+		g.material_override = glass
+		g.position = Vector3(wx, 2.0, -5.88)
+		add_child(g)
+		_rb(Vector3(wx, 2.0, -5.86), Vector3(0.08, 2.1, 0.04), Color("#FFFFFF"), 0.0)
+		_rb(Vector3(wx, 2.0, -5.86), Vector3(2.1, 0.08, 0.04), Color("#FFFFFF"), 0.0)
+	# 선반 + 도구 (물감 통 · 붓 통 · 점토 덩어리)
+	for sy in [0.8, 1.6]:
+		_rb(Vector3(-5.7, sy, -2.5), Vector3(0.5, 0.05, 3.0), Color("#8A6A47"), 0.01)
+		for k in 5:
+			var cols := [Color("#C94A4A"), Color("#3E6B9A"), Color("#E9C46A"), Color("#5E9A5E"), Color("#F4F1EA")]
+			_cy(Vector3(-5.65, sy + 0.12, -3.6 + k * 0.55), 0.1, 0.2, cols[(k + int(sy * 10)) % 5])
+	# 이젤 + 스케치 (타겟 이름)
+	_rb(Vector3(4.2, 0.2, -3.6), Vector3(0.06, 2.4, 0.06), Color("#8A6A47"), 0.0, Vector3(0, 0, -6))
+	_rb(Vector3(5.2, 0.2, -3.6), Vector3(0.06, 2.4, 0.06), Color("#8A6A47"), 0.0, Vector3(0, 0, 6))
+	_rb(Vector3(4.7, 0.95, -3.55), Vector3(1.3, 1.0, 0.03), Color("#FAF7F0"), 0.0)
+	var sk := UI.label3d("「%s」\n스케치" % Game.target["name"], 30, Color("#5A4636"))
+	sk.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	sk.position = Vector3(4.7, 0.95, -3.52)
+	add_child(sk)
+	# 점토 통 · 의자 · 바닥 천
+	_cy(Vector3(-3.8, -0.6, 3.6), 0.35, 0.6, Color("#9AA5AF"))
+	_cy(Vector3(-3.8, -0.28, 3.6), 0.3, 0.1, Color("#B5763C"))
+	_cy(Vector3(3.6, -0.55, 3.2), 0.25, 0.7, Color("#6E5743"))
+	_rb(Vector3(3.6, -0.18, 3.2), Vector3(0.6, 0.06, 0.6), Color("#8A6A47"), 0.02)
+	_rb(Vector3(0, -0.895, 0), Vector3(7.0, 0.01, 7.0), Color("#D8D1C4"), 0.0)
+	# 스포트라이트 둘 (따뜻한 빛, 받침대에 그림자)
+	for sp in [[Vector3(3.5, 5.0, 3.0), Color("#FFE9C8")], [Vector3(-3.0, 5.0, 2.0), Color("#FFF4E6")]]:
+		var l := SpotLight3D.new()
+		l.position = sp[0]
+		l.light_color = sp[1]
+		l.light_energy = 2.2
+		l.spot_range = 12.0
+		l.spot_angle = 30.0
+		l.shadow_enabled = true
+		add_child(l)
+		l.look_at_from_position(sp[0], Vector3(0, 0.3, 0))
+
+
+func _box_mesh(s: Vector3) -> Mesh:
+	var bm := BoxMesh.new()
+	bm.size = s
+	return bm
+
+
+func _rb(p: Vector3, s: Vector3, c: Color, r := 0.02, rot := Vector3.ZERO) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = Data.rounded_box(s, r) if r >= 0.012 else _box_mesh(s)
+	mi.material_override = Data.brick(c, false, 0.25, 0.6)
+	mi.position = p
+	mi.rotation_degrees = rot
+	add_child(mi)
+
+
+func _cy(p: Vector3, r: float, h: float, c: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = r; cm.bottom_radius = r; cm.height = h; cm.radial_segments = 14
+	mi.mesh = cm
+	mi.material_override = Data.brick(c, false, 0.25, 0.5)
+	mi.position = p
+	add_child(mi)
 
 
 # ── HUD ──────────────────────────────────────────────
@@ -139,6 +216,13 @@ func _build_hud() -> void:
 	ccol.add_child(UI.label("카드 「%s」 %s" % [card["name"], card["desc"]], 21, UI.ACCENT))
 	hud_card = UI.label("", 20, UI.SOFT)
 	ccol.add_child(hud_card)
+	# 출품 제목 — 전시회 이름표에 나온다
+	title_edit = LineEdit.new()
+	title_edit.placeholder_text = "작품 제목 (비우면 자동)"
+	title_edit.custom_minimum_size = Vector2(260, 0)
+	title_edit.max_length = 18
+	title_edit.add_theme_font_size_override("font_size", 16)
+	tv.add_child(title_edit)
 	layer.add_child(top)
 	UI.corner(top, Control.PRESET_CENTER_TOP, Vector2(0, 12))
 
@@ -186,6 +270,19 @@ func _build_hud() -> void:
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(nl)
 		grid.add_child(cell)
+	rv.add_child(UI.label("마감 (고른 것 / Shift = 전체)", 18, UI.INK, true))
+	var fin := HFlowContainer.new()
+	fin.add_theme_constant_override("h_separation", 4)
+	fin.add_theme_constant_override("v_separation", 4)
+	rv.add_child(fin)
+	for fi in Data.FINISHES.size():
+		var f_i := fi
+		var fb := UI.button(Data.FINISHES[fi], func():
+			if Input.is_key_pressed(KEY_SHIFT):
+				_finish_all(f_i)
+			else:
+				_apply_finish(f_i), 15)
+		fin.add_child(fb)
 	var tools := GridContainer.new()
 	tools.columns = 2
 	tools.add_theme_constant_override("h_separation", 6)
@@ -367,6 +464,28 @@ func _apply_color(ci: int) -> void:
 	selected.set_color(ci)
 	selected.set_highlight(true)
 	UI.sfx("select", -10.0)
+
+
+## 마감 재질 (플라스틱 · 대리석 · 청동 · 나무 · 금) — 전시회 조각상 느낌
+func _apply_finish(f: int) -> void:
+	if not selected:
+		_warn("먼저 덩어리를 고르세요")
+		return
+	_push_undo()
+	selected.set_finish(f)
+	selected.set_highlight(true)
+	UI.sfx("select", -10.0)
+	_note("마감: " + Data.FINISHES[f])
+
+
+## 모두에 같은 마감
+func _finish_all(f: int) -> void:
+	_push_undo()
+	for p in work_root.get_children():
+		(p as Piece).set_finish(f)
+	if selected:
+		selected.set_highlight(true)
+	_note("전체 마감: " + Data.FINISHES[f])
 
 
 func _turn(a: float) -> void:
@@ -1028,10 +1147,19 @@ func _finish(forced := false) -> void:
 	finished = true
 	_select(null)
 	Game.human()["work"] = Judge.settle_work(_dicts())
+	var tt := title_edit.text.strip_edges() if title_edit else ""
+	Game.human()["title"] = tt if tt != "" else Themes.auto_title(Game.target["name"], Game.rng)
 	for i in range(1, Game.players.size()):
 		var p: Dictionary = Game.players[i]
 		p["work"] = BotBuilder.build(Game.target, p["inventory"], p["quality"], Game.rng)
 		p["edits"] = Game.rng.randi_range(4, 40)
+		p["title"] = Themes.auto_title(Game.target["name"], Game.rng)
+		# 봇도 가끔 마감 재질을 고른다 (전시회 느낌)
+		if Game.rng.randf() < 0.45:
+			var fz := Game.rng.randi_range(1, Data.FINISHES.size() - 1)
+			for d in p["work"]:
+				if Game.rng.randf() < 0.7:
+					d["f"] = fz
 	UI.sfx("whoosh", -6.0)
 	Game.goto("exhibit")
 

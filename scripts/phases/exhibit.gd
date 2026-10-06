@@ -93,24 +93,15 @@ func _ready() -> void:
 	for k in order.size():
 		letters[order[k]] = LETTERS[k]
 	Game.set_meta("letters", letters)
-	UI.make_env(self, Color("#CFE6F2"))
-	var ped := Piece.new().setup("cylinder", 0, false)
-	ped.set_pscale(Vector3(6.2, 0.7, 6.2), false)
-	ped.position.y = -0.21
-	add_child(ped)
-	var fl := MeshInstance3D.new()
-	var pm := PlaneMesh.new(); pm.size = Vector2(40, 40)
-	fl.mesh = pm
-	fl.position.y = -0.42
-	fl.material_override = Data.brick(Color("#DCE3E8"), false, 0.25, 0.7)
-	add_child(fl)
+	UI.make_env(self, Color("#2A2725"))
+	_gallery_set()
 	pivot = Node3D.new()
 	add_child(pivot)
 	cam = Camera3D.new()
 	cam.fov = 45
 	add_child(cam)
-	cam.position = Vector3(0, 1.9, 4.6)
-	cam.look_at(Vector3(0, 0.6, 0))
+	cam.position = Vector3(0, 1.45, 3.9)
+	cam.look_at(Vector3(0, 0.25, 0))
 	_build_hud()
 	_show(0)
 
@@ -169,7 +160,10 @@ func _show(k: int) -> void:
 		pivot.add_child(Piece.from_dict(d, false))
 	pivot.rotation.y = 0
 	var letter: String = Game.get_meta("letters")[who]
-	title.text = "작품 %s  (%d / %d)" % [letter, k + 1, order.size()]
+	var ttl: String = Game.players[who].get("title", "무제")
+	title.text = "「%s」 — 작품 %s  (%d / %d)" % [ttl, letter, k + 1, order.size()]
+	if plaque:
+		plaque.text = "「%s」\n작품 %s · %s\n%s" % [ttl, letter, Themes.INFO[Game.theme]["name"], "재질: " + _finish_text(Game.players[who]["work"])]
 	var mine := who == 0
 	sub.text = ("내 작품이에요 — 평가는 안 해요" if mine else "「%s」처럼 보이나요?  별 위를 끌어서 점수를 매기세요" % Game.target["name"])
 	rate_box.visible = not mine
@@ -239,3 +233,103 @@ func _unhandled_input(ev: InputEvent) -> void:
 		bar.set_value(snappedf(bar.value + d, 0.1))
 		_rate(bar.value)
 		UI.sfx("click", -14.0)
+
+
+# ── 전시실 (갤러리) ──────────────────────────────────
+var plaque: Label3D
+
+
+func _gallery_set() -> void:
+	# 어두운 전시실 · 흰 좌대(윗면 = 작품 자리) · 스포트라이트 · 이름표 · 차단봉
+	for c in get_children():
+		if c is WorldEnvironment:
+			var env: Environment = (c as WorldEnvironment).environment
+			env.ambient_light_energy = 0.22
+			env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		if c is DirectionalLight3D:
+			(c as DirectionalLight3D).light_energy = 0.15
+	var fl := MeshInstance3D.new()
+	var pm := PlaneMesh.new(); pm.size = Vector2(40, 40)
+	fl.mesh = pm
+	fl.position.y = -1.0
+	var flm := ShaderMaterial.new()
+	flm.shader = load("res://assets/shaders/floor.gdshader")
+	flm.set_shader_parameter("style", 0)
+	flm.set_shader_parameter("col_a", Color("#5A4636"))
+	flm.set_shader_parameter("col_b", Color("#4C3B2D"))
+	flm.set_shader_parameter("gloss", 0.25)
+	flm.set_shader_parameter("scale", 0.6)
+	fl.material_override = flm
+	add_child(fl)
+	_gbox(Vector3(0, -0.5, 0), Vector3(1.9, 1.0, 1.9), Color("#F3F0EA"), 0.02)
+	_gbox(Vector3(0, -0.02, 0), Vector3(2.0, 0.04, 2.0), Color("#FFFFFF"), 0.0)
+	_gbox(Vector3(0, 1.5, -6.0), Vector3(16, 5.0, 0.2), Color("#3B3633"), 0.0)
+	_gbox(Vector3(-7.0, 1.5, 0), Vector3(0.2, 5.0, 14), Color("#34302D"), 0.0)
+	_gbox(Vector3(7.0, 1.5, 0), Vector3(0.2, 5.0, 14), Color("#34302D"), 0.0)
+	# 뒤 벽 액자 (다른 작품들 분위기)
+	for k in 3:
+		_gbox(Vector3(-4.0 + k * 4.0, 1.4, -5.88), Vector3(1.4, 1.0, 0.04), Color("#C9A24A"), 0.0)
+		_gbox(Vector3(-4.0 + k * 4.0, 1.4, -5.85), Vector3(1.2, 0.8, 0.02), [Color("#3E6B9A"), Color("#C94A4A"), Color("#5E9A5E")][k], 0.0)
+	# 차단봉 + 줄
+	for x in [-1.6, 1.6]:
+		_gcyl(Vector3(x, -0.55, 1.7), 0.04, 0.9, Color("#C9A24A"))
+	_gbox(Vector3(0, -0.2, 1.7), Vector3(3.2, 0.04, 0.04), Color("#8E2B2B"), 0.0)
+	# 이름표 (좌대 앞에 기울어진 판)
+	_gbox(Vector3(0.0, -0.2, 0.965), Vector3(0.9, 0.28, 0.02), Color("#E9E2D3"), 0.0)
+	plaque = Label3D.new()
+	plaque.font = Data.font_bold
+	plaque.font_size = 22
+	plaque.pixel_size = 0.0028
+	plaque.modulate = Color("#2B2B2B")
+	plaque.outline_size = 0
+	plaque.position = Vector3(0.0, -0.2, 0.98)
+	plaque.width = 300
+	plaque.font_size = 20
+	plaque.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	plaque.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(plaque)
+	# 스포트라이트 (위에서 좌대로)
+	var l := SpotLight3D.new()
+	l.light_color = Color("#FFEFD6")
+	l.light_energy = 4.0
+	l.spot_range = 9.0
+	l.spot_angle = 22.0
+	l.shadow_enabled = true
+	add_child(l)
+	l.look_at_from_position(Vector3(0.8, 4.2, 2.2), Vector3(0, 0.4, 0))
+	var fill := OmniLight3D.new()
+	fill.position = Vector3(-2.0, 1.6, 3.0)
+	fill.light_energy = 0.35
+	fill.omni_range = 8.0
+	add_child(fill)
+
+
+func _gbox(p: Vector3, s: Vector3, c: Color, r := 0.02, rot := Vector3.ZERO) -> void:
+	var mi := MeshInstance3D.new()
+	if r >= 0.012:
+		mi.mesh = Data.rounded_box(s, r)
+	else:
+		var bm := BoxMesh.new()
+		bm.size = s
+		mi.mesh = bm
+	mi.material_override = Data.brick(c, false, 0.25, 0.5)
+	mi.position = p
+	mi.rotation_degrees = rot
+	add_child(mi)
+
+
+func _gcyl(p: Vector3, r: float, h: float, c: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = r; cm.bottom_radius = r; cm.height = h; cm.radial_segments = 12
+	mi.mesh = cm
+	mi.material_override = Data.brick(c, false, 0.25, 0.3)
+	mi.position = p
+	add_child(mi)
+
+
+func _finish_text(work: Array) -> String:
+	var seen := {}
+	for d in work:
+		seen[Data.FINISHES[int(d.get("f", 0))]] = true
+	return " · ".join(seen.keys())
