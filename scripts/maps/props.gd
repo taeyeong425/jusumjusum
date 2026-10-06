@@ -15,6 +15,7 @@ static func _rt(yaw: float) -> Vector3:
 
 ## 학생 책상 + 서랍 + 의자. 서랍은 앞(학생 쪽)으로 빠진다
 static func desk(h, p: Vector3, yaw: float, top_c, leg_c, drawer_c: int, spot_on_top := false, chair := true) -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	h.box(p + Vector3(0, 0.74, 0), Vector3(1.1, 0.06, 0.62), top_c, yaw, false, 0.02)
@@ -34,11 +35,15 @@ static func desk(h, p: Vector3, yaw: float, top_c, leg_c, drawer_c: int, spot_on
 		for sx in [-0.19, 0.19]:
 			for sz in [-0.17, 0.17]:
 				h.box(cp + r * sx + f * sz + Vector3(0, 0.22, 0), Vector3(0.04, 0.44, 0.04), leg_c, yaw, false, 0.0)
-		h.solid_box(cp + Vector3(0, 0.45, 0), Vector3(0.45, 0.9, 0.45), yaw)
+		h.solid_box(cp + Vector3(0, 0.235, 0), Vector3(0.45, 0.47, 0.45), yaw)   # 앉는 면 높이까지만 — 밟고 책상에 오른다
 
 
 ## 큰 책상 (선생님 · 사서 · 선장) — 서랍 둘
+	h.end_obj()
+
+
 static func big_desk(h, p: Vector3, yaw: float, top_c, body_c, drawer_c: int, name := "책상 서랍") -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	h.box(p + Vector3(0, 0.78, 0), Vector3(1.9, 0.07, 0.9), top_c, yaw, false, 0.03)
@@ -49,7 +54,11 @@ static func big_desk(h, p: Vector3, yaw: float, top_c, body_c, drawer_c: int, na
 
 
 ## 사물함 (속이 빈 상자 + 문). 문은 앞으로 열린다
+	h.end_obj()
+
+
 static func locker(h, p: Vector3, yaw: float, c: int, door_c: int) -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	var w := 0.66
@@ -80,7 +89,11 @@ static func locker(h, p: Vector3, yaw: float, c: int, door_c: int) -> void:
 
 
 ## 책장: 칸마다 책 줄 + 빈자리(보물 자리). top_high = 맨 위 칸은 "높은 곳"
+	h.end_obj()
+
+
 static func bookshelf(h, p: Vector3, yaw: float, w: float, c, levels := 4, top_high := true, rng: RandomNumberGenerator = null) -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	var hh := 0.5 * levels + 0.1
@@ -110,7 +123,11 @@ static func bookshelf(h, p: Vector3, yaw: float, w: float, c, levels := 4, top_h
 
 
 ## 열린 선반 (칸 = 보물 자리)
+	h.end_obj()
+
+
 static func cubbies(h, p: Vector3, yaw: float, cols: int, rows: int, c) -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	var cw := 0.45
@@ -129,7 +146,11 @@ static func cubbies(h, p: Vector3, yaw: float, cols: int, rows: int, c) -> void:
 
 
 ## 나무 상자 (뚜껑이 뒤로 열린다)
+	h.end_obj()
+
+
 static func crate(h, p: Vector3, yaw: float, size: Vector3, c: int, lid_c: int, name := "나무 상자") -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	h.box(p + Vector3(0, size.y * 0.5 - 0.03, 0), size - Vector3(0, 0.06, 0), c, yaw, true, 0.03)
 	# 판자 무늬 띠
@@ -138,7 +159,11 @@ static func crate(h, p: Vector3, yaw: float, size: Vector3, c: int, lid_c: int, 
 
 
 ## 술통 (뚜껑이 들린다)
+	h.end_obj()
+
+
 static func barrel(h, p: Vector3, c: int, name := "술통") -> void:
+	h.obj(p)
 	h.cyl(p + Vector3(0, 0.5, 0), 0.38, 1.0, c, true, 14, 0.6)
 	h.cyl(p + Vector3(0, 0.5, 0), 0.42, 0.12, 14, false, 14)
 	h.cyl(p + Vector3(0, 0.2, 0), 0.4, 0.08, 14, false, 14)
@@ -147,7 +172,11 @@ static func barrel(h, p: Vector3, c: int, name := "술통") -> void:
 
 
 ## 보물상자 (반구 뚜껑 대신 상자 뚜껑 + 금속 띠)
+	h.end_obj()
+
+
 static func chest(h, p: Vector3, yaw: float, name := "보물상자") -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	h.box(p + Vector3(0, 0.25, 0), Vector3(0.9, 0.5, 0.55), 12, yaw, true, 0.04)
@@ -158,7 +187,12 @@ static func chest(h, p: Vector3, yaw: float, name := "보물상자") -> void:
 
 
 ## 액자 (벽에 붙음, 아래가 앞으로 들린다 — 뒤에 쪽지)
+	h.end_obj()
+
+
 static func frame(h, p: Vector3, yaw: float, size: Vector2, frame_c: int, art_c: int, name := "액자") -> void:
+	p.y = minf(p.y, 1.05)   # 작은 캐릭터 손이 닿게
+	h.obj(p)
 	var f := _fwd(yaw)
 	var e: Dictionary = h.container("frame", p + f * 0.04, Vector3(size.x, size.y, 0.05), yaw, frame_c, p + f * 0.06 - Vector3(0, size.y * 0.3, 0), name)
 	var pc: Piece = e["node"]
@@ -176,7 +210,11 @@ static func frame(h, p: Vector3, yaw: float, size: Vector2, frame_c: int, art_c:
 
 
 ## 받침대 + 서랍 (미술관 조각 받침)
+	h.end_obj()
+
+
 static func pedestal(h, p: Vector3, yaw: float, c: int, hgt := 1.0) -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	h.box(p + Vector3(0, hgt * 0.5, 0), Vector3(0.75, hgt, 0.75), c, yaw, true, 0.03)
 	h.box(p + Vector3(0, hgt + 0.03, 0), Vector3(0.85, 0.06, 0.85), c, yaw, false, 0.02)
@@ -185,7 +223,11 @@ static func pedestal(h, p: Vector3, yaw: float, c: int, hgt := 1.0) -> void:
 
 
 ## 문 두 짝 수납장
+	h.end_obj()
+
+
 static func cabinet(h, p: Vector3, yaw: float, c: int, door_c: int, name := "수납장") -> void:
+	h.obj(p)
 	var f := _fwd(yaw)
 	var r := _rt(yaw)
 	h.box(p + Vector3(0, 0.55, 0) - f * 0.05, Vector3(1.2, 1.1, 0.45), c, yaw, true, 0.03)
@@ -193,18 +235,22 @@ static func cabinet(h, p: Vector3, yaw: float, c: int, door_c: int, name := "수
 		h.container("door", p + r * sx + Vector3(0, 0.55, 0) + f * 0.2, Vector3(0.56, 1.0, 0.035), yaw, door_c,
 			p + r * sx + Vector3(0, 0.15, 0) + f * 0.55, name)
 	h.spot(p + Vector3(0, 1.13, 0), "high")
+	h.end_obj()
 
 
 static func bench(h, p: Vector3, yaw: float, c, leg_c) -> void:
+	h.obj(p)
 	var r := _rt(yaw)
 	h.box(p + Vector3(0, 0.45, 0), Vector3(1.6, 0.07, 0.45), c, yaw, false, 0.02)
 	for sx in [-0.65, 0.65]:
 		h.box(p + r * sx + Vector3(0, 0.22, 0), Vector3(0.07, 0.44, 0.4), leg_c, yaw, false, 0.0)
 	h.solid_box(p + Vector3(0, 0.25, 0), Vector3(1.6, 0.5, 0.45), yaw)
 	h.spot(p + Vector3(0, 0.02, 0) + r * 0.3, "open")
+	h.end_obj()
 
 
 static func table(h, p: Vector3, yaw: float, size: Vector2, top_c, leg_c, spots_n := 1) -> void:
+	h.obj(p)
 	var r := _rt(yaw)
 	var f := _fwd(yaw)
 	h.box(p + Vector3(0, 0.76, 0), Vector3(size.x, 0.07, size.y), top_c, yaw, false, 0.03)
@@ -214,16 +260,20 @@ static func table(h, p: Vector3, yaw: float, size: Vector2, top_c, leg_c, spots_
 	h.solid_box(p + Vector3(0, 0.4, 0), Vector3(size.x, 0.8, size.y), yaw)
 	for k in spots_n:
 		h.spot(p + Vector3(0, 0.8, 0) + r * (size.x * (k + 0.5) / spots_n - size.x * 0.5) * 0.8, "open")
+	h.end_obj()
 
 
 static func plant(h, p: Vector3) -> void:
+	h.obj(p)
 	h.cyl(p + Vector3(0, 0.22, 0), 0.22, 0.44, 3, true, 12, 0.5, 0.26)
 	h.ball(p + Vector3(0, 0.75, 0), 0.38, 6)
 	h.ball(p + Vector3(0.18, 0.95, 0.1), 0.24, 5)
 	h.spot(p + Vector3(0.35, 0.02, 0.3), "open")
+	h.end_obj()
 
 
 static func tree(h, p: Vector3) -> void:
+	h.obj(p)
 	h.cyl(p + Vector3(0, 1.0, 0), 0.22, 2.0, 12, true, 10)
 	h.ball(p + Vector3(0, 2.6, 0), 1.2, 6)
 	h.ball(p + Vector3(0.7, 2.2, 0.3), 0.8, 5)
@@ -232,11 +282,16 @@ static func tree(h, p: Vector3) -> void:
 
 
 ## 매달린 등불 (실내 · 배 아래칸)
+	h.end_obj()
+
+
 static func lamp(h, p: Vector3, col := Color("#FFD9A0"), energy := 1.6, rng_ := 7.0) -> void:
+	h.obj(p)
 	h.cyl(p, 0.14, 0.22, 4, false, 8)
 	var l := OmniLight3D.new()
-	l.position = p - Vector3(0, 0.2, 0)
+	l.position = h.P(p) - Vector3(0, 0.4, 0)
 	l.light_color = col
 	l.light_energy = energy
-	l.omni_range = rng_
+	l.omni_range = rng_ * h.W
 	h.lvl_roots[h.lvl].add_child(l)
+	h.end_obj()

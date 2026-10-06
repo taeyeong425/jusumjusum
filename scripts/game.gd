@@ -24,12 +24,15 @@ var history: Array = []          # 라운드별 결과
 var last_result: Dictionary
 var best_record := 0
 var human_ratings: Dictionary = {}
+var mouse_sens := 1.0           # 설정: 마우스 감도
+var volume := 0.8               # 설정: 음량 (0~1)
 
 var main: Node
 
 
 func _ready() -> void:
 	rng.randomize()
+	_load_settings()
 	Data.load_fonts()
 	_load_record()
 	autotest = "--autotest" in OS.get_cmdline_user_args()
@@ -157,3 +160,20 @@ func _load_record() -> void:
 		var d = JSON.parse_string(f.get_as_text())
 		if d is Dictionary:
 			best_record = int(d.get("best", 0))
+
+
+func apply_settings() -> void:
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.001)))
+	var f := FileAccess.open("user://settings.json", FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"sens": mouse_sens, "vol": volume}))
+
+
+func _load_settings() -> void:
+	if FileAccess.file_exists("user://settings.json"):
+		var f := FileAccess.open("user://settings.json", FileAccess.READ)
+		var d = JSON.parse_string(f.get_as_text())
+		if d is Dictionary:
+			mouse_sens = float(d.get("sens", 1.0))
+			volume = float(d.get("vol", 0.8))
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.001)))

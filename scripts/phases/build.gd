@@ -212,7 +212,7 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("덩어리 끌기 = 옮기기 (공중 · 겹치기 OK) · Shift+끌기 = 높이 · G = 바닥에 붙이기\n색 고리 = 그 축으로 회전 · 색 네모 = 그 방향으로 늘이기 · 크기 = 전체 · M = 자석 맞춤 · 빈 곳 끌기 = 시점", 17, UI.SOFT))
+	bv.add_child(UI.label("덩어리 끌기 = 옮기기 (공중 · 겹치기 OK) · 끄는 중 휠 / Shift+끌기 / R·V = 높이 · G = 바닥에 붙이기\n색 고리 = 그 축으로 회전 · 색 네모 = 그 방향으로 늘이기 · 크기 = 전체 · M = 자석 맞춤 · 빈 곳 끌기 = 시점", 17, UI.SOFT))
 	bv.add_child(UI.primary("다 했다 →", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
@@ -470,7 +470,53 @@ func _near_ring(pos: Vector2) -> int:
 	return best
 
 
+## 잡고 끄는 중(또는 R · V 키) 휠 = 높이만 위아래 (폴아웃 4식). 그 밖엔 줌
+func _wheel_height(dy: float) -> bool:
+	if mode != "move" or not selected:
+		return false
+	if not pushed:
+		_push_undo()
+		pushed = true
+	var cur: Vector3 = anim.get(selected, selected.position)
+	cur.y = clampf(cur.y + dy, -0.2, 3.5)
+	anim[selected] = cur
+	_note("높이 %.2f" % cur.y)
+	return true
+
+
+## 고른 덩어리 아래로 바닥까지 안내선 + 그림자 점 + 높이 숫자 — 공중에 뜬 높이를 읽게
+func _draw_height_guide() -> void:
+	if not selected:
+		return
+	var c := selected.global_position
+	var hh := selected.world_half_extents()
+	var bottom := c - Vector3(0, hh.y, 0)
+	var q := PhysicsRayQueryParameters3D.create(bottom + Vector3(0, -0.01, 0), bottom + Vector3(0, -6, 0), 0b11)
+	if selected.body:
+		q.exclude = [selected.body.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var ground := Vector3(c.x, -0.1, c.z)
+	if hit:
+		ground = hit["position"]
+	if cam.is_position_behind(bottom) or cam.is_position_behind(ground):
+		return
+	var a := cam.unproject_position(bottom)
+	var b := cam.unproject_position(ground)
+	var gap := bottom.y - ground.y
+	if gap > 0.02:
+		overlay.draw_dashed_line(a, b, Color("#E2553D"), 2.0, 6.0)
+	# 바닥의 그림자 점 (눌린 타원)
+	var pts := PackedVector2Array()
+	for i in 20:
+		var t := TAU * i / 20.0
+		pts.append(cam.unproject_position(ground + Vector3(cos(t) * hh.x, 0.005, sin(t) * hh.z)))
+	overlay.draw_colored_polygon(pts, Color(0.1, 0.1, 0.1, 0.18))
+	if gap > 0.02:
+		overlay.draw_string(Data.font_bold, b + Vector2(8, -4), "높이 %.2f" % gap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#E2553D"))
+
+
 func _draw_overlay() -> void:
+	_draw_height_guide()
 	for g in guides:
 		if cam.is_position_behind(g[0]) or cam.is_position_behind(g[1]):
 			continue
@@ -751,9 +797,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				if mb.pressed:
 					mode = "pan"
 			MOUSE_BUTTON_WHEEL_UP:
-				dist_t = maxf(1.6, dist_t * 0.88)
+				if not _wheel_height(0.04):
+					dist_t = maxf(1.6, dist_t * 0.88)
 			MOUSE_BUTTON_WHEEL_DOWN:
-				dist_t = minf(10.0, dist_t * 1.12)
+				if not _wheel_height(-0.04):
+					dist_t = minf(10.0, dist_t * 1.12)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		_key(event as InputEventKey)
 
@@ -894,6 +942,16 @@ func _key(k: InputEventKey) -> void:
 		KEY_E: _turn(PI / 4)
 		KEY_T: _straighten()
 		KEY_G: _drop_down()
+		KEY_R:
+			if selected:
+				_push_undo()
+				var c: Vector3 = anim.get(selected, selected.position)
+				anim[selected] = c + Vector3(0, 0.05, 0)
+		KEY_V:
+			if selected:
+				_push_undo()
+				var c2: Vector3 = anim.get(selected, selected.position)
+				anim[selected] = c2 - Vector3(0, 0.05, 0)
 		KEY_M: _toggle_magnet()
 		KEY_Z:
 			if ctrl:

@@ -4,7 +4,7 @@ extends Node3D
 ## 서랍 · 사물함 · 술통 · 액자 같은 가구를 열어야 보이는 봉투도 있다. 봉투는 조립 시작 때 한꺼번에 연다.
 ## 보물 수 = 인원 × 1.5 × 10 (6명 = 90개). 먼저 줍는 사람이 임자.
 
-const SPEED := 5.0
+const SPEED := 5.6
 const GRAVITY := 22.0
 const JUMP_V := 8.6
 const BAG_MAX := 12            # 봉투 칸
@@ -16,7 +16,7 @@ const L_ITEM := 2
 const L_CHAR := 4
 const LVL_LAYERS := [1, 8, 16, 64]  # 층별 충돌 레이어 — 위층을 숨길 때 카메라가 그 층을 무시하게
 const L_WALL := 32             # 벽 — 캐릭터는 막고 카메라는 통과 (위에서 들여다보는 인형의 집)
-const ALL_WORLD := 1 | 8 | 16 | 32 | 64
+const ALL_WORLD := 1 | 8 | 16 | 32 | 64 | 256   # 바닥 · 층 · 벽 · 가구 (밀 수 있는 것 128은 빼고 — 길찾기가 그걸 지나가며 민다)
 var wall_mode := false
 
 var time_left := 150.0
@@ -26,7 +26,7 @@ var cam_pivot: Node3D
 var spring: SpringArm3D
 var cam: Camera3D
 var cam_yaw := 0.0
-var cam_pitch := -0.5
+var cam_pitch := -0.32
 var actors: Array = []
 var obstacles: Array = []      # (_solid · _ramp 호환용)
 var info: Dictionary = {}      # 지도 정보: levels · bounds · spawns · rooms
@@ -42,11 +42,13 @@ var spots: Array = []          # 숨김 자리 {pos, kind, lvl}
 var ladders: Array = []        # {pos: Vector2, y0, y1, yaw}
 var links: Array = []          # 길찾기 층 연결 [아래 점, 위 점]
 var hidden_from := 99          # 이 층부터 위는 숨김 (머리 위에 천장이 있을 때)
+var pushables: Array = []
+var push_t := 0.0
 var furn := true             # 가구 충돌 표시 (조준 레이가 가구 충돌은 통과 — 서랍 속 봉투를 겨눌 수 있게)
 
 var aim: Dictionary = {}
 var act: Dictionary = {}
-var zoom := 6.5
+var zoom := 4.0           # 시점 거리 고정 (배그식)
 var hold_prog := 0.0
 var tick_t := 0.0
 var step_t := 0.0
@@ -89,6 +91,7 @@ func _ready() -> void:
 		batches.append({})
 	var builder: GDScript = load("res://scripts/maps/%s.gd" % Game.theme)
 	info = builder.call("build", self)
+	_scale_info()
 	for k in batches.size():
 		_commit(batches[k], lvl_roots[k])
 	_spawn_actors()
@@ -104,12 +107,60 @@ func _ready() -> void:
 var ready_done := false
 
 
+## 지도 정보(경계 · 방 · 시작 자리)도 배율만큼
+func _scale_info() -> void:
+	var b: Rect2 = info["bounds"]
+	info["bounds"] = Rect2(b.position * W, b.size * W)
+	var rs := []
+	for r in info.get("rooms", []):
+		var rr: Rect2 = r[0]
+		var nr: Array = r.duplicate()
+		nr[0] = Rect2(rr.position * W, rr.size * W)
+		rs.append(nr)
+	info["rooms"] = rs
+	var sp := []
+	for s in info["spawns"]:
+		sp.append(s * W)
+	info["spawns"] = sp
+	var lv_s := []
+	for y in info["levels"]:
+		lv_s.append(float(y) * W)
+	info["levels"] = lv_s
+
+
 func _exit_tree() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	RenderingServer.global_shader_parameter_set("seethru_on", 0.0)
 
 
 # ── 지도 짓기 도구 (maps/*.gd가 부른다) ───────────────
+# 배율 W: 지도 전체(위치 · 크기 · 높이)를 W배로 키운다. 캐릭터는 그대로 → 캐릭터가 작은 사람처럼 된다 (메챠 카멜레온 · Tinykin).
+# 책상 위 · 책장 칸 · 배 난간처럼 가구가 곧 지형이 된다 — 의자 → 책상 → 선반으로 오르는 3D 탐색.
+
+var W := 1.0
+var walls: Array = []
+var _wall_mats := {}
+const L_FURN := 256            # 가구 충돌: 캐릭터는 막고 카메라는 통과 (가구에 카메라가 끌려 들어오지 않게)
+const L_PUSH := 128            # 밀 수 있는 가구 (상자 · 의자 · 통)
+
+
+func set_world_scale(s: float) -> void:
+	W = s
+
+
+## (호환) 가구 묶음 — 같은 배율이라 따로 할 일이 없다
+func obj(_p: Vector3) -> void:
+	pass
+
+
+func end_obj() -> void:
+	pass
+
+
+## 지도 좌표 → 실제 좌표
+func P(p: Vector3) -> Vector3:
+	return p * W
+
 
 func lv(k: int) -> void:
 	lvl = k
@@ -143,10 +194,15 @@ func _commit(b: Dictionary, parent: Node3D) -> void:
 		parent.add_child(mi)
 
 
-## 충돌 상자 (이 층 레이어). yaw는 라디안
+## 충돌 상자 (지도 좌표 · 지도 크기)
 func solid_box(center: Vector3, size: Vector3, yaw := 0.0) -> StaticBody3D:
+	return _solid(P(center), size * W, yaw)
+
+
+## 충돌 상자 (실제 좌표)
+func _solid(center: Vector3, size: Vector3, yaw := 0.0) -> StaticBody3D:
 	var b := StaticBody3D.new()
-	b.collision_layer = L_WALL if wall_mode else LVL_LAYERS[lvl]
+	b.collision_layer = L_WALL if wall_mode else (L_FURN if furn else LVL_LAYERS[lvl])
 	b.collision_mask = 0
 	if furn:
 		b.set_meta("furn", true)
@@ -175,19 +231,38 @@ func _plain_box(size: Vector3) -> Mesh:
 	return bm
 
 
-## 상자 하나 (중심 · 크기). round = 모서리 반지름 (0 = 각진 상자)
+## 상자 하나 (중심 · 크기, 지도 단위). round = 모서리 반지름
 func box(center: Vector3, size: Vector3, c, yaw := 0.0, collide := true, round := 0.04, gloss := 0.55) -> void:
+	_box_raw(P(center), size * W, c, yaw, collide, round * W, gloss)
+
+
+func _box_raw(center: Vector3, size: Vector3, c, yaw := 0.0, collide := true, round := 0.04, gloss := 0.55) -> void:
 	_batch_add(_rbox_mesh(size, round), Transform3D(Basis(Vector3.UP, yaw), center), c, gloss)
 	if collide:
-		solid_box(center, size, yaw)
+		_solid(center, size, yaw)
 
 
-## 기울어진 상자 (돛 · 깃발 · 액자 등) — 충돌 없음
+func lay_box(center: Vector3, size: Vector3, c, yaw := 0.0, collide := true, round := 0.04, gloss := 0.55) -> void:
+	box(center, size, c, yaw, collide, round, gloss)
+
+
+## a → b 를 잇는 수평 막대 (난간 · 띠 · 테두리)
+func box_span(a: Vector3, b: Vector3, hgt: float, w: float, c, collide := false, solid_h := 1.0) -> void:
+	var pa := P(a)
+	var pb := P(b)
+	var d := Vector2(pb.x - pa.x, pb.z - pa.z)
+	var yaw := -atan2(d.y, d.x)
+	var mid := (pa + pb) * 0.5
+	_box_raw(mid, Vector3(d.length(), hgt * W, w * W), c, yaw, false, 0.02 * W)
+	if collide:
+		_solid(Vector3(mid.x, pa.y + hgt * W * 0.5 - solid_h * W * 0.5, mid.z), Vector3(d.length(), solid_h * W, maxf(w * W, 0.15)), yaw)
+
+
 func box_rot(center: Vector3, size: Vector3, c, rot_deg: Vector3, round := 0.03, gloss := 0.55) -> void:
-	_batch_add(_rbox_mesh(size, round), Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), c, gloss)
+	_batch_add(_rbox_mesh(size * W, round * W), Transform3D(Basis.from_euler(rot_deg * PI / 180.0), P(center)), c, gloss)
 
 
-func cyl(center: Vector3, radius: float, height: float, c, collide := true, sides := 16, gloss := 0.55, top_r := -1.0) -> void:
+func _cyl_mesh(radius: float, height: float, top_r: float, sides: int) -> Mesh:
 	var key := "cy%.3f_%.3f_%.3f_%d" % [radius, height, top_r, sides]
 	if not _mesh_cache.has(key):
 		var cm := CylinderMesh.new()
@@ -197,147 +272,238 @@ func cyl(center: Vector3, radius: float, height: float, c, collide := true, side
 		cm.radial_segments = sides
 		cm.rings = 0
 		_mesh_cache[key] = cm
-	_batch_add(_mesh_cache[key], Transform3D(Basis(), center), c, gloss)
+	return _mesh_cache[key]
+
+
+func cyl(center: Vector3, radius: float, height: float, c, collide := true, sides := 16, gloss := 0.55, top_r := -1.0) -> void:
+	var pc := P(center)
+	_batch_add(_cyl_mesh(radius * W, height * W, top_r * W if top_r >= 0.0 else -1.0, sides), Transform3D(Basis(), pc), c, gloss)
 	if collide:
-		solid_box(center, Vector3(radius * 1.6, height, radius * 1.6))
+		_solid(pc, Vector3(radius * 1.6, height, radius * 1.6) * W)
 
 
 func cyl_rot(center: Vector3, radius: float, height: float, c, rot_deg: Vector3, sides := 14) -> void:
-	var key := "cy%.3f_%.3f_-1.000_%d" % [radius, height, sides]
-	if not _mesh_cache.has(key):
-		var cm := CylinderMesh.new()
-		cm.bottom_radius = radius
-		cm.top_radius = radius
-		cm.height = height
-		cm.radial_segments = sides
-		cm.rings = 0
-		_mesh_cache[key] = cm
-	_batch_add(_mesh_cache[key], Transform3D(Basis.from_euler(rot_deg * PI / 180.0), center), c)
+	_batch_add(_cyl_mesh(radius * W, height * W, -1.0, sides), Transform3D(Basis.from_euler(rot_deg * PI / 180.0), P(center)), c)
 
 
 func ball(center: Vector3, radius: float, c, squash := Vector3.ONE) -> void:
-	var key := "sp%.3f" % radius
+	var key := "sp%.3f" % (radius * W)
 	if not _mesh_cache.has(key):
 		var sm := SphereMesh.new()
-		sm.radius = radius
-		sm.height = radius * 2
+		sm.radius = radius * W
+		sm.height = radius * W * 2
 		sm.radial_segments = 14
 		sm.rings = 7
 		_mesh_cache[key] = sm
-	_batch_add(_mesh_cache[key], Transform3D(Basis.from_scale(squash), center), c)
+	_batch_add(_mesh_cache[key], Transform3D(Basis.from_scale(squash), P(center)), c)
 
 
-## 두 점을 잇는 막대 (밧줄 · 사슬)
 func beam(a: Vector3, b: Vector3, t: float, c) -> void:
-	var d := b - a
+	var pa := P(a)
+	var pb := P(b)
+	var d := pb - pa
 	var y := d.normalized()
 	var x := y.cross(Vector3.FORWARD if absf(y.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
 	var z := x.cross(y)
-	_batch_add(_rbox_mesh(Vector3(t, d.length(), t), 0.0), Transform3D(Basis(x, y, z), (a + b) * 0.5), c)
+	_batch_add(_rbox_mesh(Vector3(t * W, d.length(), t * W), 0.0), Transform3D(Basis(x, y, z), (pa + pb) * 0.5), c)
 
 
-## 덩어리 종류 그대로 장식 (변형 메시 활용: 별 · 하트 · 아치 · 피라미드 등)
 func part(t: String, spec, c, pos: Vector3, rot_deg := Vector3.ZERO, k := 1.0) -> void:
 	var shp: Vector3 = spec if spec is Vector3 else Data.variant(t, int(spec))[1]
 	var mk := Data.mesh_key(t, shp)
-	var xf := Transform3D(Basis.from_euler(rot_deg * PI / 180.0), pos) * Transform3D(Basis.from_scale(shp * k), Vector3.ZERO) * Data.base_xform(mk)
+	var xf := Transform3D(Basis.from_euler(rot_deg * PI / 180.0), P(pos)) * Transform3D(Basis.from_scale(shp * k * W), Vector3.ZERO) * Data.base_xform(mk)
 	_batch_add(Data.mesh(mk), xf, c)
 
 
-## 바닥판 (셰이더 무늬) + 충돌. rect = xz 사각형, y = 윗면
+## 바닥판 (셰이더 무늬) + 충돌. rect = xz 사각형, y = 윗면 (지도 단위)
 func floor_rect(rect: Rect2, y: float, style: int, ca: Color, cb: Color, gloss := 0.55, thick := 0.25) -> void:
 	furn = false
+	rect = Rect2(rect.position * W, rect.size * W)
+	y *= W
+	thick *= W
 	var mi := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = rect.size
 	mi.mesh = pm
-	mi.position = Vector3(rect.get_center().x, y + 0.002, rect.get_center().y)
+	mi.position = Vector3(rect.get_center().x, y + 0.004, rect.get_center().y)
 	var m := ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/floor.gdshader")
 	m.set_shader_parameter("style", style)
 	m.set_shader_parameter("col_a", ca)
 	m.set_shader_parameter("col_b", cb)
 	m.set_shader_parameter("gloss", gloss)
+	m.set_shader_parameter("scale", W * 0.8)
 	mi.material_override = m
 	lvl_roots[lvl].add_child(mi)
 	var fc := Vector3(rect.get_center().x, y - thick * 0.5, rect.get_center().y)
 	if lvl > 0:
-		box(fc - Vector3(0, 0.004, 0), Vector3(rect.size.x, thick, rect.size.y), ca.darkened(0.35), 0.0, false, 0.0)
-	var sb := solid_box(fc, Vector3(rect.size.x, thick, rect.size.y))
+		_box_raw(fc - Vector3(0, 0.006, 0), Vector3(rect.size.x, thick, rect.size.y), ca.darkened(0.35), 0.0, false, 0.0)
+	var sb := _solid(fc, Vector3(rect.size.x, thick, rect.size.y))
 	if lvl > 0:
-		sb.set_meta("roof", true)   # 아래층에서 머리 위에 있으면 이 층을 숨긴다
+		sb.set_meta("roof", true)
 	furn = true
 
 
-## 벽: a→b (xz), y 바닥, 높이 h. gaps = [[a에서 거리, 폭], ...] (문)
-func wall(a: Vector2, b: Vector2, y: float, h: float, c, thick := 0.2, gaps := []) -> void:
+## 천장 (그림자 없음 — 햇빛이 실내를 비추게) + 형광등 판
+func ceiling(rect: Rect2, y: float, c: Color, lights := true) -> void:
+	rect = Rect2(rect.position * W, rect.size * W)
+	y *= W
+	var mi := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = rect.size
+	pm.flip_faces = true
+	mi.mesh = pm
+	mi.position = Vector3(rect.get_center().x, y, rect.get_center().y)
+	mi.material_override = Data.brick(c, false, 0.25, 0.9)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lvl_roots[lvl].add_child(mi)
+	if lights:
+		var lm := StandardMaterial3D.new()
+		lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		lm.albedo_color = Color("#FFFBEF")
+		var nx := maxi(1, int(rect.size.x / (4.5 * W)))
+		var nz := maxi(1, int(rect.size.y / (4.5 * W)))
+		for ix in nx:
+			for iz in nz:
+				var lp := Vector3(rect.position.x + rect.size.x * (ix + 0.5) / nx, y - 0.03, rect.position.y + rect.size.y * (iz + 0.5) / nz)
+				var l := MeshInstance3D.new()
+				l.mesh = _rbox_mesh(Vector3(1.2 * W, 0.04 * W, 0.3 * W), 0.0)
+				l.material_override = lm
+				l.position = lp
+				l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				lvl_roots[lvl].add_child(l)
+
+
+## 벽: a→b (xz, 지도 단위), y 바닥, 높이 h. gaps = [[a에서 거리, 폭], ...] (문 — 문 위에 상인방, 문틀)
+## windows = [[a에서 거리, 폭], ...] (창문 — 밝은 유리 + 창틀)
+func wall(a: Vector2, b: Vector2, y: float, h: float, c, thick := 0.2, gaps := [], windows := []) -> void:
 	furn = false
 	wall_mode = true
+	a *= W
+	b *= W
+	y *= W
+	h *= W
+	thick *= W
+	var door_h := minf(h - 0.2 * W, 2.3 * W)
 	var L := a.distance_to(b)
 	var d := (b - a) / L
+	var n := Vector2(-d.y, d.x)
 	var yaw := -atan2(d.y, d.x)
-	var cuts := [[0.0, 0.0]]
 	var sorted_gaps := gaps.duplicate()
 	sorted_gaps.sort_custom(func(p, q): return p[0] < q[0])
 	var t := 0.0
 	var segs := []
+	var col := _col(c)
+	var dark := col.darkened(0.3)
 	for g in sorted_gaps:
-		var g0: float = float(g[0]) - float(g[1]) * 0.5
+		var gc: float = float(g[0]) * W
+		var gw: float = float(g[1]) * W
+		var g0: float = gc - gw * 0.5
 		if g0 > t:
 			segs.append([t, g0])
-		t = float(g[0]) + float(g[1]) * 0.5
+		t = gc + gw * 0.5
+		# 문 위 벽 (상인방) + 문틀
+		var gm := a + d * gc
+		if h - door_h > 0.05:
+			_box_raw(Vector3(gm.x, y + (door_h + h) * 0.5, gm.y), Vector3(gw, h - door_h, thick), col, yaw, true, 0.0)
+		for s in [-1.0, 1.0]:
+			var jp: Vector2 = a + d * (gc + float(s) * gw * 0.5)
+			_box_raw(Vector3(jp.x, y + door_h * 0.5, jp.y), Vector3(0.12 * W, door_h, thick + 0.08 * W), Color("#E9E2D3"), yaw, false, 0.0)
+		_box_raw(Vector3(gm.x, y + door_h + 0.05 * W, gm.y), Vector3(gw + 0.24 * W, 0.1 * W, thick + 0.08 * W), Color("#E9E2D3"), yaw, false, 0.0)
 	if t < L:
 		segs.append([t, L])
 	for s in segs:
 		var s0: float = s[0]
 		var s1: float = s[1]
 		var mid := a + d * (s0 + s1) * 0.5
-		box(Vector3(mid.x, y + h * 0.5, mid.y), Vector3(s1 - s0, h, thick), c, yaw, true, 0.03)
-		# 걸레받이 (벽 아래 어두운 띠) — 덜 밋밋하게
-		box(Vector3(mid.x, y + 0.08, mid.y), Vector3(s1 - s0, 0.16, thick + 0.04), _col(c).darkened(0.3), yaw, false, 0.0)
+		_box_raw(Vector3(mid.x, y + h * 0.5, mid.y), Vector3(s1 - s0, h, thick), col, yaw, true, 0.0)
+		# 아랫단 판벽(어두운 색) · 걸레받이 · 윗몰딩 — 양쪽 면
+		for side in [-1.0, 1.0]:
+			var off: Vector2 = n * float(side) * (thick * 0.5 + 0.01 * W)
+			_box_raw(Vector3(mid.x + off.x, y + 0.45 * W, mid.y + off.y), Vector3(s1 - s0, 0.9 * W, 0.02 * W), col.darkened(0.12), yaw, false, 0.0)
+			_box_raw(Vector3(mid.x + off.x, y + 0.92 * W, mid.y + off.y), Vector3(s1 - s0, 0.05 * W, 0.04 * W), Color("#E9E2D3"), yaw, false, 0.0)
+			_box_raw(Vector3(mid.x + off.x, y + 0.06 * W, mid.y + off.y), Vector3(s1 - s0, 0.12 * W, 0.04 * W), dark, yaw, false, 0.0)
+			_box_raw(Vector3(mid.x + off.x, y + h - 0.06 * W, mid.y + off.y), Vector3(s1 - s0, 0.1 * W, 0.05 * W), Color("#F4EFE6"), yaw, false, 0.0)
+	# 창문 (벽에 붙은 밝은 유리 — 바깥이 대낮처럼)
+	var gm2 := StandardMaterial3D.new()
+	gm2.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gm2.albedo_color = Color("#CFEAF7")
+	for wdw in windows:
+		var wc: float = float(wdw[0]) * W
+		var ww: float = float(wdw[1]) * W
+		var wp := a + d * wc
+		for side in [-1.0, 1.0]:
+			var off: Vector2 = n * float(side) * (thick * 0.5 + 0.015 * W)
+			var g := MeshInstance3D.new()
+			g.mesh = _plain_box(Vector3(ww, 1.3 * W, 0.01 * W))
+			g.material_override = gm2
+			g.position = Vector3(wp.x + off.x, y + 1.75 * W, wp.y + off.y)
+			g.rotation.y = yaw
+			g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			lvl_roots[lvl].add_child(g)
+			for fy in [1.1, 1.75, 2.4]:
+				_box_raw(Vector3(wp.x + off.x * 1.5, y + fy * W, wp.y + off.y * 1.5), Vector3(ww + 0.1 * W, 0.06 * W, 0.04 * W), Color("#FFFFFF"), yaw, false, 0.0)
+			for fx_ in [-0.5, 0.0, 0.5]:
+				var fp: Vector2 = wp + d * ww * float(fx_)
+				_box_raw(Vector3(fp.x + off.x * 1.5, y + 1.75 * W, fp.y + off.y * 1.5), Vector3(0.06 * W, 1.36 * W, 0.04 * W), Color("#FFFFFF"), yaw, false, 0.0)
 	furn = true
 	wall_mode = false
 
 
-## 계단: bottom → top (위층 바닥 가장자리). 디딤판 + 경사 충돌 + 길찾기 연결
+## (v0.6.2: 벽 접기 대신 카메라가 벽에 부딪혀 앞으로 온다 — 실내 3인칭)
+func _update_walls(_delta: float) -> void:
+	pass
+
+
+## 계단: bottom → top (지도 단위)
 func stairs(bottom: Vector3, top: Vector3, width: float, c) -> void:
+	bottom = P(bottom)
+	top = P(top)
+	width *= W
 	var d := Vector3(top.x - bottom.x, 0, top.z - bottom.z)
 	var run := d.length()
 	var dir := d / run
 	var rise := top.y - bottom.y
-	var n := maxi(4, int(rise / 0.25))
+	var n := maxi(4, int(rise / 0.28))
 	var yaw := atan2(-dir.z, dir.x)
 	for i in n:
 		var f := (i + 0.5) / n
 		var p := bottom + dir * run * f
 		var hgt := rise * (i + 1) / n
-		box(Vector3(p.x, bottom.y + hgt * 0.5, p.z), Vector3(run / n + 0.02, hgt, width), _col(c).darkened(0.05 * (i % 2)), yaw, false, 0.02)
+		_box_raw(Vector3(p.x, bottom.y + hgt * 0.5, p.z), Vector3(run / n + 0.02, hgt, width), _col(c).darkened(0.05 * (i % 2)), yaw, false, 0.02)
+	furn = false
 	_ramp(lvl_roots[lvl], bottom + Vector3(0, -0.12, 0) - dir * 0.3, top, width)
+	furn = true
 	links.append([bottom - dir * 0.6, top + dir * 0.7])
 
 
-## 사다리: base(바닥) → 높이 y1. 앞(yaw 방향)으로 올라가면 위 판으로 나간다
+## 사다리: base(지도 단위) → 높이 y1(지도 단위)
 func ladder(base: Vector3, y1: float, yaw: float, c) -> void:
-	var fwd := Vector3(sin(yaw), 0, cos(yaw))   # Props와 같은 규칙: yaw 0 = +z
+	base = P(base)
+	y1 *= W
+	var fwd := Vector3(sin(yaw), 0, cos(yaw))
 	var side := Vector3(-fwd.z, 0, fwd.x)
 	var h := y1 - base.y
-	for s in [-0.28, 0.28]:
-		box(base + side * s + Vector3(0, h * 0.5, 0), Vector3(0.07, h, 0.07), c, yaw, false, 0.02)
+	for s in [-0.3, 0.3]:
+		_box_raw(base + side * s + Vector3(0, h * 0.5, 0), Vector3(0.08, h, 0.08), c, yaw, false, 0.02)
 	var rungs := int(h / 0.35)
 	for i in rungs:
-		box(base + Vector3(0, 0.3 + i * 0.35, 0), Vector3(0.56, 0.05, 0.05), c, yaw, false, 0.0)
+		_box_raw(base + Vector3(0, 0.3 + i * 0.35, 0), Vector3(0.6, 0.06, 0.06), c, yaw, false, 0.0)
 	ladders.append({"pos": Vector2(base.x, base.z), "y0": base.y, "y1": y1, "fwd": fwd})
 	links.append([base - fwd * 0.5, Vector3(base.x, y1, base.z) + fwd * 0.8])
 
 
-## 숨김 자리 등록 (open = 그냥 보임 · high = 높은 곳/깊은 곳)
+## 숨김 자리 (지도 좌표). 캐릭터 손이 안 닿는 높이(바닥에서 2.4 이상)는 버린다 — 올라설 데가 있으면 그 위에 등록
 func spot(pos: Vector3, kind := "open") -> void:
-	spots.append({"pos": pos, "kind": kind, "lvl": lvl})
+	var p := P(pos)
+	spots.append({"pos": p, "kind": kind, "lvl": lvl})
 
 
-## 열 수 있는 가구. kind: drawer(앞으로 빠짐) · door(옆 경첩) · lid(뒤 경첩, 위로) · frame(위 경첩, 앞으로 들림)
-## pos = 움직이는 판의 중심, size = 판 크기, yaw = 앞 방향 회전, inside = 봉투가 놓일 자리
+## 열 수 있는 가구 (지도 좌표 · 지도 크기)
 func container(kind: String, pos: Vector3, size: Vector3, yaw: float, c: int, inside: Vector3, name: String) -> Dictionary:
+	pos = P(pos)
+	inside = P(inside)
+	size *= W
 	var pivot := Node3D.new()
 	var basis := Basis(Vector3.UP, yaw)
 	var hinge := Vector3.ZERO
@@ -352,12 +518,36 @@ func container(kind: String, pos: Vector3, size: Vector3, yaw: float, c: int, in
 	pc.set_pscale(size / 0.5, false)
 	pc.position = basis.inverse() * (-hinge)
 	pivot.add_child(pc)
-	var e := {"kind": "box", "node": pc, "pivot": pivot, "mode": kind, "hold": 0.9, "name": name,
+	var e := {"kind": "box", "node": pc, "pivot": pivot, "mode": kind, "hold": 0.0, "name": name,
 		"alive": true, "inside": [], "slot": inside, "lvl": lvl, "yaw": yaw}
 	pc.set_meta("entry", e)
 	containers.append(e)
 	return e
 
+
+## 밀 수 있는 가구 (상자 · 통 · 의자). 밑에 쪽지가 깔려 있을 수 있다 — 밀어서 치우면 보인다
+func pushable(pos: Vector3, size: Vector3, c, yaw := 0.0, mass := 3.0) -> RigidBody3D:
+	var rb := RigidBody3D.new()
+	rb.collision_layer = L_PUSH
+	rb.collision_mask = ALL_WORLD | L_PUSH | L_CHAR
+	rb.mass = mass
+	rb.linear_damp = 3.0
+	rb.angular_damp = 4.0
+	rb.position = P(pos) + Vector3(0, size.y * W * 0.5 + 0.02, 0)
+	rb.rotation.y = yaw
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = size * W
+	cs.shape = sh
+	rb.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = _rbox_mesh(size * W, 0.04 * W)
+	mi.material_override = Data.brick(_col(c), false, 0.25, 0.55)
+	rb.add_child(mi)
+	rb.set_meta("furn", true)
+	lvl_roots[lvl].add_child(rb)
+	pushables.append({"body": rb, "start": rb.position, "inside": [], "lvl": lvl})
+	return rb
 
 ## 가구가 열린다
 func _open_anim(e: Dictionary) -> void:
@@ -449,6 +639,7 @@ func _glint(n: Node3D, strength: float) -> void:
 func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: Dictionary = {}) -> Dictionary:
 	var pc := _treasure_node(tier)
 	pc.position = pos + Vector3(0, 0.02, 0)
+	pc.scale = Vector3.ONE * W * 0.8
 	pc.rotation.y = Game.rng.randf() * TAU
 	if tier == "note":
 		pc.rotation.z = Game.rng.randf_range(-0.08, 0.08)
@@ -492,6 +683,9 @@ func _place_treasures() -> void:
 	var opens := []
 	var highs := []
 	for s in spots:
+		# 손이 안 닿는 높이(그 층 바닥에서 2.4 넘게)는 쓰지 않는다
+		if (s["pos"] as Vector3).y - level_y(int(s["lvl"])) > 2.4:
+			continue
 		if s["kind"] == "high":
 			highs.append(s)
 		else:
@@ -557,6 +751,14 @@ func _place_treasures() -> void:
 	for s in highs:
 		opens.append(s)
 	opens.shuffle()
+	# 밀 수 있는 가구 밑에도 쪽지 (밀어서 치우면 보인다)
+	var pz := pushables.duplicate()
+	pz.shuffle()
+	for k in mini(pz.size(), int(n_note * 0.25)):
+		var pe: Dictionary = pz[k]
+		var sp0: Vector3 = pe["start"]
+		_add_treasure("note", Vector3(sp0.x, level_y(int(pe["lvl"])), sp0.z), int(pe["lvl"]), take.call(1), pe)
+		n_note -= 1
 	for k in n_note:
 		put_open.call("note", take.call(1))
 
@@ -571,7 +773,7 @@ func _level_of(y: float) -> int:
 
 # ── 길찾기 (층 · 계단 · 사다리) ──────────────────────
 
-const NAV_CELL := 0.5
+const NAV_CELL := 0.6
 var nav: AStar3D
 var nav_dim := Vector2i.ZERO
 var nav_org := Vector2.ZERO
@@ -601,7 +803,7 @@ func _build_nav() -> void:
 			for ix in nav_dim.x:
 				var x := nav_org.x + (ix + 0.5) * NAV_CELL
 				var z := nav_org.y + (iz + 0.5) * NAV_CELL
-				var rq := PhysicsRayQueryParameters3D.create(Vector3(x, y + 1.0, z), Vector3(x, y - 0.5, z), ALL_WORLD)
+				var rq := PhysicsRayQueryParameters3D.create(Vector3(x, y + 1.0, z), Vector3(x, y - 0.5, z), ALL_WORLD & ~L_WALL)   # 벽 윗면은 바닥이 아니다
 				var hit := space.intersect_ray(rq)
 				if hit.is_empty():
 					continue
@@ -717,7 +919,7 @@ func _spawn_actors() -> void:
 		var p: Dictionary = Game.players[i]
 		var body := CharacterBody3D.new()
 		body.collision_layer = L_CHAR
-		body.collision_mask = ALL_WORLD
+		body.collision_mask = ALL_WORLD | L_PUSH
 		body.floor_snap_length = 0.45
 		var cs := CollisionShape3D.new()
 		var cap := CapsuleShape3D.new()
@@ -730,6 +932,10 @@ func _spawn_actors() -> void:
 		body.add_child(vis)
 		var name_l := UI.label3d(p["name"], 40)
 		name_l.position = Vector3(0, 2.2, 0)
+		name_l.visible = i != 0
+		name_l.fixed_size = true   # 가까이 와도 화면을 가리지 않게 작은 고정 크기
+		name_l.pixel_size = 0.0011
+		name_l.font_size = 30
 		body.add_child(name_l)
 		var sp: Vector3 = spots_s[i % spots_s.size()]
 		body.position = sp + Vector3(Game.rng.randf_range(-0.6, 0.6), 0.2, Game.rng.randf_range(-0.6, 0.6))
@@ -816,16 +1022,38 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("land", 0.0)
 	_update_camera()
 	_update_levels(delta)
-	RenderingServer.global_shader_parameter_set("seethru_on", 1.0)
-	RenderingServer.global_shader_parameter_set("seethru_pos", (actors[0]["body"] as Node3D).global_position + Vector3(0, 1.0, 0))
+	_update_walls(delta)   # 구멍(셰이더) 대신 가리는 벽을 접는다
+	_update_pushables(delta)
 	_update_aim()
 	_update_hud(delta)
 	if time_left <= 0:
 		_end()
 
 
+## 밀어서 치운 가구 밑 쪽지가 드러난다
+func _update_pushables(delta: float) -> void:
+	push_t -= delta
+	if push_t > 0.0:
+		return
+	push_t = 0.2
+	for pe in pushables:
+		var inside: Array = pe["inside"]
+		if inside.is_empty():
+			continue
+		var rb: RigidBody3D = pe["body"]
+		var s0: Vector3 = pe["start"]
+		if Vector2(rb.global_position.x - s0.x, rb.global_position.z - s0.z).length() > 0.9 * W:
+			for t in inside:
+				t["hidden"] = false
+				(t["node"] as Piece).visible = true
+				(t["node"] as Piece).body.collision_layer = L_ITEM
+			inside.clear()
+			Sfx.play("pick", -12.0)
+
+
 ## 머리 위에 천장(위층 바닥)이 있으면 그 층부터 숨긴다 — 인형의 집처럼 들여다본다
 func _update_levels(delta: float) -> void:
+	return   # v0.6.2: 천장 있는 실내 — 층을 숨기지 않는다
 	detect_t -= delta
 	if detect_t > 0.0:
 		return
@@ -928,14 +1156,8 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		_take(a, act)
 		_cancel_act()
 		return
-	# 가구 열기: 손이 잡고 덜컹덜컹 → 열림
-	hold_prog += delta / (float(act["hold"]) * OPEN_TIME)
-	tick_t -= delta
-	if tick_t <= 0:
-		tick_t = 0.22
-		Sfx.play("tick", -8.0, 0.2)
-	_wobble(true)
-	if hold_prog >= 1.0:
+	# 가구: 게이지 없이 바로 열린다 (v0.6.2)
+	if true:
 		hold_prog = 0.0
 		_wobble(false)
 		var e := act
@@ -1030,8 +1252,7 @@ func _bot_step(a: Dictionary, delta: float) -> void:
 		a["goal"] = {}
 		a["wait"] = randf_range(0.2, 0.6) + (1.0 - float(Game.players[a["i"]]["quality"])) * 1.2
 	else:
-		a["prog"] = float(a["prog"]) + delta / (float(ref["hold"]) * OPEN_TIME)
-		if float(a["prog"]) >= 1.0:
+		if true:
 			a["goal"] = {}
 			_open(a, ref)
 			a["wait"] = randf_range(0.1, 0.4)
@@ -1145,8 +1366,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and (looking or (event.button_mask & MOUSE_BUTTON_MASK_RIGHT)):
-		cam_yaw -= event.relative.x * 0.0042
-		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0036, -1.3, -0.3)   # 벽 위에서 내려다보게
+		cam_yaw -= event.relative.x * 0.0042 * Game.mouse_sens
+		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0036 * Game.mouse_sens, -1.2, 0.25)
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
@@ -1155,9 +1376,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				else:
 					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			MOUSE_BUTTON_WHEEL_UP:
-				zoom = clampf(zoom - 0.6, 2.5, 11.0)
+				_select_slot(posmod(slot - 1, maxi(1, _envs(actors[0]).size())))
 			MOUSE_BUTTON_WHEEL_DOWN:
-				zoom = clampf(zoom + 0.6, 2.5, 11.0)
+				_select_slot(posmod(slot + 1, maxi(1, _envs(actors[0]).size())))
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_SPACE: jump_req = true
@@ -1518,8 +1739,6 @@ func run_scenario(sc: String) -> void:
 		"look":
 			for i in 25:
 				await get_tree().physics_frame
-			zoom = 11.0
-			cam_pitch = -0.95
 			cam_yaw = 0.6
 			return
 	print("[scenario] done")
@@ -1547,7 +1766,7 @@ func _scenario_reach() -> void:
 			_envs(me).clear()
 		act = e
 		var t := 0.0
-		while e["alive"] and t < 15.0 and not act.is_empty():
+		while e["alive"] and t < 25.0 and not act.is_empty():
 			await get_tree().physics_frame
 			t += 1.0 / 60.0
 		if not e["alive"]:
@@ -1730,6 +1949,14 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 		vel.y -= GRAVITY * delta
 	body.velocity = vel
 	body.move_and_slide()
+	# 밀 수 있는 가구는 부딪히면 밀린다
+	for ci in body.get_slide_collision_count():
+		var kc := body.get_slide_collision(ci)
+		var rb := kc.get_collider() as RigidBody3D
+		if rb and kc.get_normal().y < 0.5:
+			var push := -kc.get_normal()
+			push.y = 0.0
+			rb.apply_central_impulse(push.normalized() * 0.9 * rb.mass * delta * 8.0)
 	# 지금 밟고 있는 것
 	var floor_obj: Object = null
 	if body.is_on_floor():
@@ -1759,7 +1986,7 @@ func _low_ledge(body: CharacterBody3D, dir: Vector3) -> bool:
 	var space := get_world_3d().direct_space_state
 	var base := body.global_position
 	var lo := PhysicsRayQueryParameters3D.create(base + Vector3(0, 0.3, 0), base + Vector3(0, 0.3, 0) + dir * 0.8, ALL_WORLD)
-	var hi := PhysicsRayQueryParameters3D.create(base + Vector3(0, 1.45, 0), base + Vector3(0, 1.45, 0) + dir * 0.9, ALL_WORLD)
+	var hi := PhysicsRayQueryParameters3D.create(base + Vector3(0, 0.95, 0), base + Vector3(0, 0.95, 0) + dir * 0.9, ALL_WORLD)   # 난간(1m)은 못 넘게
 	return not space.intersect_ray(lo).is_empty() and space.intersect_ray(hi).is_empty()
 
 
@@ -1855,7 +2082,7 @@ func _build_camera() -> void:
 	add_child(cam_pivot)
 	spring = SpringArm3D.new()
 	spring.spring_length = zoom
-	spring.collision_mask = 0   # 위에서 내려다보는 시점이라 카메라 충돌 없음 (돛대 · 가구에 끌려 들어오지 않게)
+	spring.collision_mask = L_WALL | 1 | 8 | 16 | 64   # 벽 · 바닥 · 층에 부딪히면 앞으로 (가구는 통과)
 	spring.margin = 0.3
 	var sph := SphereShape3D.new()
 	sph.radius = 0.25

@@ -38,6 +38,26 @@ func _ready() -> void:
 	var rec := UI.label("최고 기록: 할당량 통과 %d라운드" % Game.best_record if Game.best_record > 0 else "아직 기록이 없어요", 24, UI.SOFT)
 	rec.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(rec)
+	# 설정: 마우스 감도 · 음량 (저장됨)
+	var sets := UI.hbox(16)
+	sets.alignment = BoxContainer.ALIGNMENT_CENTER
+	for cfg in [["마우스 감도", 0.3, 2.5, Game.mouse_sens, "sens"], ["음량", 0.0, 1.0, Game.volume, "vol"]]:
+		sets.add_child(UI.label(cfg[0], 20, UI.SOFT))
+		var sl := HSlider.new()
+		sl.min_value = cfg[1]
+		sl.max_value = cfg[2]
+		sl.step = 0.05
+		sl.value = cfg[3]
+		sl.custom_minimum_size = Vector2(160, 24)
+		var key: String = cfg[4]
+		sl.value_changed.connect(func(v: float):
+			if key == "sens":
+				Game.mouse_sens = v
+			else:
+				Game.volume = v
+			Game.apply_settings())
+		sets.add_child(sl)
+	col.add_child(sets)
 
 	var help := UI.panel()
 	var hv := UI.vbox(4)
