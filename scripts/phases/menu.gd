@@ -74,7 +74,7 @@ func _ready() -> void:
 		hv.add_child(UI.label(line, 21, UI.SOFT))
 	col.add_child(help)
 
-	var credit := UI.label("프로토타입 v0.6 (보물찾기) · Godot 4.7 · 폰트 나눔고딕 (OFL) · 효과음 Kenney (CC0)", 18, Color(UI.SOFT, 0.7))
+	var credit := UI.label("프로토타입 v0.6.3 (보물찾기) · Godot 4.7 · 폰트 나눔고딕 (OFL) · 효과음 Kenney (CC0)", 18, Color(UI.SOFT, 0.7))
 	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(credit)
 

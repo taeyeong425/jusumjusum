@@ -7,12 +7,32 @@ var span := 1.0
 
 
 func _ready() -> void:
-	UI.make_env(self, Color("#CFE6F2"))
+	UI.make_env(self, Color("#2A2725"))
+	# 전시회장: 어두운 벽 · 나무 바닥 · 작품마다 스포트라이트
+	for c in get_children():
+		if c is WorldEnvironment:
+			(c as WorldEnvironment).environment.ambient_light_energy = 0.3
+			(c as WorldEnvironment).environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		if c is DirectionalLight3D:
+			(c as DirectionalLight3D).light_energy = 0.25
 	var fl := MeshInstance3D.new()
-	var pm := PlaneMesh.new(); pm.size = Vector2(80, 40)
+	var pm := PlaneMesh.new(); pm.size = Vector2(120, 40)
 	fl.mesh = pm
-	fl.material_override = Data.brick(Color("#DCE3E8"), false, 0.25, 0.7)
+	fl.position.x = 30
+	var flm := ShaderMaterial.new()
+	flm.shader = load("res://assets/shaders/floor.gdshader")
+	flm.set_shader_parameter("style", 0)
+	flm.set_shader_parameter("col_a", Color("#5A4636"))
+	flm.set_shader_parameter("col_b", Color("#4C3B2D"))
+	flm.set_shader_parameter("scale", 0.6)
+	fl.material_override = flm
 	add_child(fl)
+	var back := MeshInstance3D.new()
+	var bbm := BoxMesh.new(); bbm.size = Vector3(120, 8, 0.2)
+	back.mesh = bbm
+	back.position = Vector3(30, 4, -3.5)
+	back.material_override = Data.brick(Color("#3B3633"), false, 0.25, 0.7)
+	add_child(back)
 	var letters: Dictionary = Game.get_meta("letters") if Game.has_meta("letters") else {}
 	var x := 0.0
 	for rec in Game.history:
@@ -28,6 +48,13 @@ func _ready() -> void:
 			ped.position = Vector3(px, 0.25, 0)
 			ped.material_override = Data.flat_material(Color("#F4C84A") if i == top_i else (Color("#FFFFFF") if i != 0 else Color("#FFF0C2")))
 			add_child(ped)
+			var sl := SpotLight3D.new()
+			sl.light_color = Color("#FFEFD6")
+			sl.light_energy = 2.6 if i == top_i else 1.6
+			sl.spot_range = 7.0
+			sl.spot_angle = 18.0
+			add_child(sl)
+			sl.look_at_from_position(Vector3(px, 4.5, 2.0), Vector3(px, 0.8, 0))
 			if i == top_i:
 				_crown(Vector3(px, 2.95, 0))
 				var badge := UI.label3d("1등", 40)
