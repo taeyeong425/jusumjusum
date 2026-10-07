@@ -294,11 +294,11 @@ func _build_hud() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.add_theme_constant_override("v_separation", 2)
 	rv.add_child(grid)
 	for i in 16:
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(40, 40)
+		b.custom_minimum_size = Vector2(40, 30)
 		b.focus_mode = Control.FOCUS_NONE
 		for st in ["normal", "hover", "pressed"]:
 			var sb := StyleBoxFlat.new()
@@ -311,7 +311,7 @@ func _build_hud() -> void:
 		b.pressed.connect(func(): _apply_color(ci))
 		var cell := UI.vbox(0)
 		cell.add_child(b)
-		var nl := UI.label(Data.palette()[i]["name"], 14, UI.SOFT)
+		var nl := UI.label(Data.palette()[i]["name"], 12, UI.SOFT)
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(nl)
 		grid.add_child(cell)
@@ -341,6 +341,7 @@ func _build_hud() -> void:
 	spin_btn = UI.button("돌려보기", func(): spin = not spin, 18)
 	tools.add_child(spin_btn)
 	tools.add_child(UI.button("바닥에 붙이기 (G)", _drop_down, 18))
+	tools.add_child(UI.button("옆에 딱 붙이기 (J)", _attach_nearest, 18))
 	magnet_btn = UI.button("", _toggle_magnet, 18)
 	tools.add_child(magnet_btn)
 	_toggle_magnet(false)
@@ -360,7 +361,7 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("덩어리 끌기 = 옮기기 · 방향키 = 조금씩 (Shift 크게) · 휠 / PageUp·Down / R·V = 높이 · G = 바닥에 붙이기\n색 고리 = 회전 · 색 네모 = 늘이기 · M = 자석 · Tab = 앞/옆/위 시점 · 빈 곳 끌기 = 시점 돌리기", 17, UI.SOFT))
+	bv.add_child(UI.label("끌기 = 옮기기 (가까우면 딱 붙음, Alt = 안 붙게) · J = 옆에 딱 붙이기 · G = 아래에 붙이기 · 방향키 = 조금씩\n휠 · PageUp/Down = 높이 · 색 고리 = 회전 · 색 네모 = 늘이기 · Tab = 앞/옆/위 시점 · 빈 곳 끌기 = 시점", 17, UI.SOFT))
 	bv.add_child(UI.primary("다 했다 →", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
@@ -888,6 +889,94 @@ func _align_xz(xz: Vector3, h: Vector3) -> Vector3:
 	return xz
 
 
+## 맞닿기: 다른 덩어리 면에서 tol 안쪽(살짝 겹친 것도)이면 면과 면이 딱 맞게. 나머지 축 가운데도 거의 맞으면 맞춘다
+func _contact_snap(p: Vector3, tol: float) -> Vector3:
+	if not selected:
+		return p
+	var h := selected.world_half_extents()
+	var best_d := INF
+	var best_ax := -1
+	var best_o: Piece = null
+	for o in work_root.get_children():
+		if o == selected or not (o is Piece):
+			continue
+		var oc: Vector3 = anim.get(o, (o as Piece).position)
+		var oh := (o as Piece).world_half_extents()
+		for ax in 3:
+			var ok := true
+			for b in 3:
+				if b != ax and absf(p[b] - oc[b]) > h[b] + oh[b] - 0.02:
+					ok = false   # 그 축에서 서로 안 겹치면 맞닿을 면이 없다
+			if not ok:
+				continue
+			var sgn := signf(p[ax] - oc[ax]) if absf(p[ax] - oc[ax]) > 0.001 else 1.0
+			var touch: float = oc[ax] + sgn * (oh[ax] + h[ax])
+			var diff: float = touch - p[ax]
+			# 밖에서 다가오는 중(diff<0) 또는 살짝 파묻힌(diff>0) 것만 — 깊이 겹친 건 일부러 그런 것
+			if absf(diff) < tol and absf(diff) < absf(best_d):
+				best_d = diff
+				best_ax = ax
+				best_o = o
+	if best_o == null:
+		return p
+	var out := p
+	out[best_ax] += best_d
+	var oc2: Vector3 = anim.get(best_o, best_o.position)
+	for b in 3:   # 옆 축 가운데 맞춤 (거의 맞을 때만)
+		if b != best_ax and b != 1 and absf(out[b] - oc2[b]) < 0.06:
+			out[b] = oc2[b]
+	out.y = maxf(out.y, h.y - 0.2)
+	_guide(oc2, out)
+	if snap_note != "딱 붙음" or snap_t <= 0.0:
+		UI.sfx("tick", -16.0)
+	_note("딱 붙음")
+	return out
+
+
+## J: 가장 가까운 덩어리 쪽으로 미끄러져 면에 붙는다 (대충 옆에 두고 누르기)
+func _attach_nearest() -> void:
+	if not selected:
+		_warn("붙일 덩어리를 먼저 고르세요")
+		return
+	var p: Vector3 = anim.get(selected, selected.position)
+	var h := selected.world_half_extents()
+	var best := INF
+	var target := p
+	for o in work_root.get_children():
+		if o == selected or not (o is Piece):
+			continue
+		var oc: Vector3 = anim.get(o, (o as Piece).position)
+		var oh := (o as Piece).world_half_extents()
+		# 가장 가까운 축 하나로 다가간다 (나머지 축은 겹치게 끌어온다)
+		var gap := Vector3.ZERO
+		for ax in 3:
+			gap[ax] = absf(p[ax] - oc[ax]) - (h[ax] + oh[ax])
+		var ax_m := 0
+		for ax in 3:
+			if gap[ax] > gap[ax_m]:
+				ax_m = ax
+		var cand := p
+		var sgn := signf(p[ax_m] - oc[ax_m]) if absf(p[ax_m] - oc[ax_m]) > 0.001 else 1.0
+		cand[ax_m] = oc[ax_m] + sgn * (oh[ax_m] + h[ax_m])
+		for b in 3:
+			if b != ax_m and absf(cand[b] - oc[b]) > h[b] + oh[b] - 0.05:
+				cand[b] = oc[b] + signf(cand[b] - oc[b]) * (h[b] + oh[b] - 0.05)
+			if b != ax_m and b != 1 and absf(cand[b] - oc[b]) < 0.12:
+				cand[b] = oc[b]
+		var d := cand.distance_to(p)
+		if d < best:
+			best = d
+			target = cand
+	if best == INF:
+		_warn("붙일 다른 덩어리가 없어요")
+		return
+	_push_undo()
+	target.y = maxf(target.y, h.y)
+	anim[selected] = target
+	UI.sfx("place", -8.0)
+	_note("딱 붙이기")
+
+
 func _guide(a: Vector3, b: Vector3) -> void:
 	guides.append([a, b])
 
@@ -1010,7 +1099,10 @@ func _input(event: InputEvent) -> void:
 					cur.y = clampf(cur.y - mm.relative.y * dist * 0.0022, -0.2, 3.5)
 					anim[selected] = cur
 				else:
-					anim[selected] = _snap_target(mm.position)
+					var tp := _snap_target(mm.position)
+					if not magnet and not Input.is_key_pressed(KEY_ALT):
+						tp = _contact_snap(tp, 0.1)
+					anim[selected] = tp
 			"size":
 				var k := _knobs()
 				if not k.is_empty():
@@ -1137,6 +1229,7 @@ func _key(k: InputEventKey) -> void:
 				var c2: Vector3 = anim.get(selected, selected.position)
 				anim[selected] = c2 - Vector3(0, 0.05, 0)
 		KEY_M: _toggle_magnet()
+		KEY_J: _attach_nearest()
 		KEY_TAB: _next_view()
 		KEY_Z:
 			if ctrl:
@@ -1370,6 +1463,20 @@ func run_scenario(_sc: String) -> void:
 	ev.physical_keycode = KEY_PAGEUP
 	_nudge(ev)
 	print("[build] 방향키 → ×4 · PageUp: 목표 %s" % str((anim[b] as Vector3).snapped(Vector3.ONE * 0.01)))
+	# 맞닿기: a 오른쪽 면에서 6cm 떨어진 곳 → 딱 붙어야
+	anim.erase(b)
+	b.position = Vector3(0, 1.0, 0)
+	ah = a.world_half_extents()
+	bh = b.world_half_extents()
+	var near := Vector3(ah.x + bh.x + 0.06, a.position.y, 0.03)
+	var sn := _contact_snap(near, 0.1)
+	print("[build] 맞닿기: 틈 0.06 → %.3f (0이면 딱), z %.2f (가운데 0)" % [(sn.x - bh.x) - (a.position.x + ah.x), sn.z])
+	# J: 멀리(0.5) 떨어진 것 → 붙는다
+	b.position = Vector3(ah.x + bh.x + 0.5, a.position.y + 0.1, 0.4)
+	anim.erase(b)
+	_attach_nearest()
+	var jt: Vector3 = anim[b]
+	print("[build] J 붙이기: 틈 %.3f, z %.2f" % [(jt.x - bh.x) - (a.position.x + ah.x), jt.z])
 	if OS.get_cmdline_user_args().has("--keep"):   # 화면 확인용: 떠 있는 덩어리 + 그림자 + 격자
 		_set_view(3)
 		return
