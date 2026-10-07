@@ -36,7 +36,7 @@ func _ready() -> void:
 	var letters: Dictionary = Game.get_meta("letters") if Game.has_meta("letters") else {}
 	var x := 0.0
 	for rec in Game.history:
-		var lab := UI.label3d("%d라운드 「%s」 %s" % [rec["round"], rec["target"], "통과" if rec["pass"] else "여기까지"], 44)
+		var lab := UI.label3d("%d라운드  %s  ·  %s" % [rec["round"], rec["target"], "통과" if rec["pass"] else "실패"], 44)
 		lab.position = Vector3(x + rec["works"].size() * 1.3 - 1.3, 3.95, -3.3)
 		add_child(lab)
 		var top_i := Game.round_top(rec)

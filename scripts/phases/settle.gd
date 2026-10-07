@@ -8,6 +8,7 @@ var reveal_t := 0.0
 var verdict_l: Label
 var detail_l: Label
 var stand_l: Label
+var stand_grid: GridContainer
 var button_bar: PanelContainer
 var primary: Button
 var buttons: HBoxContainer
@@ -52,7 +53,12 @@ func _build_ui(c_ok: bool, r_ok: bool) -> void:
 	var col := UI.vbox(10)
 	margin.add_child(col)
 	var chalk := Color("#F4F6F8")
-	col.add_child(UI.label("%d / %d라운드 정산 · 「%s」 · 할당량 ★%.1f 이상 %d명" % [Game.round_i, Game.ROUNDS, Game.target["name"], Game.quota[0], Game.quota[1]], 26, chalk, true))
+	var hd := UI.hbox(16)
+	col.add_child(hd)
+	hd.add_child(UI.label("%d / %d 라운드 결과" % [Game.round_i, Game.ROUNDS], 32, chalk, true))
+	var hs := UI.label("%s  ·  ★%.1f 이상 %d명이면 통과" % [Game.target["name"], Game.quota[0], Game.quota[1]], 20, Color(chalk, 0.65))
+	hs.size_flags_vertical = Control.SIZE_SHRINK_END
+	hd.add_child(hs)
 
 	var main := UI.hbox(20)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -68,9 +74,13 @@ func _build_ui(c_ok: bool, r_ok: bool) -> void:
 	verdict_l = UI.label("", 40, chalk, true)
 	verdict_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.add_child(verdict_l)
-	stand_l = UI.label("", 18, Color("#FFE08A"), true)
-	stand_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stand_l = UI.label("", 18, Color(chalk, 0.6))
 	left.add_child(stand_l)
+	stand_grid = GridContainer.new()
+	stand_grid.columns = 3
+	stand_grid.add_theme_constant_override("h_separation", 36)
+	stand_grid.add_theme_constant_override("v_separation", 2)
+	left.add_child(stand_grid)
 
 	var right := UI.vbox(10)
 	right.custom_minimum_size = Vector2(390, 0)
@@ -88,28 +98,27 @@ func _build_ui(c_ok: bool, r_ok: bool) -> void:
 	names.shuffle()
 	var says: Array = Judge.comments(Game.human()["work"], result["scores"][0], Game.target["name"], Game.rng)
 	for k in says.size():
-		mv.add_child(UI.label("%s: “%s”" % [names[k % names.size()], says[k]], 18, UI.SOFT))
-	# 카드
-	var cp := UI.panel()
-	right.add_child(cp)
-	var cv := UI.vbox(2)
-	cp.add_child(cv)
+		mv.add_child(UI.label("%s  “%s”" % [names[k % names.size()], says[k]], 18, UI.SOFT))
+	# 카드 결과 (같은 패널 아래)
 	var card: Dictionary = Game.human()["card"]
-	cv.add_child(UI.label("내 카드 「%s」 %s — %s" % [card["name"], card["desc"], "성공! 등수 +0.5점 · 티켓 +1" if c_ok and r_ok else "실패"], 18, UI.GOOD if c_ok and r_ok else UI.BAD, true))
-	cv.add_child(UI.label("방 전체 티켓 %d장 (3장 = 할당량 한 단계 낮추기)" % Game.tickets, 16, UI.SOFT))
+	var sep := HSeparator.new()
+	mv.add_child(sep)
+	var ok_c := c_ok and r_ok
+	mv.add_child(UI.label("카드 %s  %s" % [card["name"], "성공 +0.5점" if ok_c else "실패"], 19, UI.GOOD if ok_c else UI.SOFT, true))
+	mv.add_child(UI.label("티켓 %d / 3 — 3장이면 통과 조건을 낮출 수 있어요" % Game.tickets, 18, UI.SOFT))
 	# 부문상 — 내 것 먼저, 나머지는 한 줄씩
 	var ap := UI.panel()
 	right.add_child(ap)
-	var av := UI.vbox(0)
+	var av := UI.vbox(2)
 	ap.add_child(av)
-	av.add_child(UI.label("부문상", 20, UI.INK, true))
+	av.add_child(UI.label("부문상", 22, UI.INK, true))
 	var letters: Dictionary = Game.get_meta("letters")
 	var aw: Array = result["awards"].duplicate()
 	aw.sort_custom(func(a, b): return a["who"] == 0 and b["who"] != 0)
 	for a in aw:
 		var who: int = a["who"]
 		var nm := "내 작품" if who == 0 else "작품 %s" % letters[who]
-		av.add_child(UI.label("%s — %s" % [nm, a["name"]], 16 if who != 0 else 19, UI.ACCENT if who == 0 else UI.SOFT, who == 0))
+		av.add_child(UI.label("%s   %s" % [a["name"], nm], 18, UI.ACCENT if who == 0 else UI.SOFT, who == 0))
 
 	# 아래 버튼 줄 (화면 밖으로 밀려나지 않게 따로 고정)
 	var bp := UI.panel()
@@ -139,22 +148,24 @@ func _process(delta: float) -> void:
 func _show_verdict() -> void:
 	var v := verdict
 	if v["pass"]:
-		verdict_l.text = "통과!  %d명 / %d명 필요" % [v["got"], v["need"]]
+		verdict_l.text = "통과   %d / %d명" % [v["got"], v["need"]]
 		verdict_l.add_theme_color_override("font_color", Color("#BFE3A0"))
 	else:
-		verdict_l.text = "아깝다…  %d명 / %d명 필요" % [v["got"], v["need"]]
+		verdict_l.text = "아깝게 실패   %d / %d명" % [v["got"], v["need"]]
 		verdict_l.add_theme_color_override("font_color", Color("#F2A7B5"))
 	var me_avg: float = result["avg"][0]
-	detail_l.text = "내 작품 ★%.1f · 닮음 %.0f%%" % [me_avg, result["scores"][0] * 100]
+	detail_l.text = "내 작품  ★%.1f   닮음 %.0f%%" % [me_avg, result["scores"][0] * 100]
 	for c in buttons.get_children():
 		c.queue_free()
 	if not v["pass"] and Game.tickets >= 3 and not Game.lowered_this_round:
-		buttons.add_child(UI.button("티켓 3장으로 할당량 한 단계 낮추기", _lower, 24))
+		buttons.add_child(UI.button("티켓 3장 써서 통과 조건 낮추기", _lower, 22))
 	if Game.round_i < Game.ROUNDS:
-		primary = UI.primary("다음 라운드 (%d / %d) →   [Enter]" % [Game.round_i + 1, Game.ROUNDS], _next_round, 28)
+		primary = UI.primary("다음 라운드", _next_round, 26)
 	else:
-		primary = UI.primary("최종 결과 보기 →   [Enter]", _to_gallery, 28)
+		primary = UI.primary("최종 결과 보기", _to_gallery, 26)
+	primary.custom_minimum_size.x = 240
 	buttons.add_child(primary)
+	buttons.add_child(UI.keycap("Enter", 18))
 	button_bar.visible = true
 	_store_history()
 	_show_standings()
@@ -162,15 +173,14 @@ func _show_verdict() -> void:
 
 ## 지금까지 전체 등수 (라운드 평점 합계)
 func _show_standings() -> void:
-	var letters: Dictionary = Game.get_meta("letters")
-	var parts := []
 	var rank := 0
 	for row in Game.standings():
 		rank += 1
 		var i: int = row["i"]
 		var nm: String = "나" if i == 0 else Game.players[i]["name"]
-		parts.append(("%d등 %s %.1f" % [rank, nm, row["total"]]) if i != 0 else ("[%d등 나 %.1f]" % [rank, row["total"]]))
-	stand_l.text = "전체 등수 (%d라운드 합계)  " % Game.history.size() + "  ·  ".join(parts)
+		var l := UI.label("%d   %s   ★%.1f" % [rank, nm, row["total"]], 20, Color("#FFD27A") if i == 0 else Color("#F4F6F8", 0.85), i == 0)
+		stand_grid.add_child(l)
+	stand_l.text = "전체 순위 · %d라운드 합계" % Game.history.size()
 
 
 ## Enter / Space = 다음으로

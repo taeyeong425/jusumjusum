@@ -75,6 +75,7 @@ var per := 10.0
 var pivot: Node3D
 var cam: Camera3D
 var title: Label
+var count_l: Label
 var sub: Label
 var timer_l: Label
 var rate_box: VBoxContainer
@@ -112,14 +113,17 @@ func _build_hud() -> void:
 	var top := UI.panel()
 	var tv := UI.vbox(2)
 	top.add_child(tv)
-	title = UI.label("", 40, UI.INK, true)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count_l = UI.label("", 18, UI.SOFT)
+	count_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	tv.add_child(count_l)
+	title = UI.label("", 36, UI.INK, true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tv.add_child(title)
 	sub = UI.label("", 22, UI.SOFT)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tv.add_child(sub)
 	layer.add_child(top)
-	UI.corner(top, Control.PRESET_CENTER_TOP, Vector2(0, 14))
+	UI.corner(top, Control.PRESET_TOP_LEFT, Vector2(16, 16))   # 가운데 위는 작품을 가렸다
 
 	var bottom := UI.panel()
 	var bv := UI.vbox(6)
@@ -145,7 +149,8 @@ func _build_hud() -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(sp)
-	h.add_child(UI.primary("다음 작품 →  [Enter]", _next, 22))
+	h.add_child(UI.primary("다음 작품", _next, 22))
+	h.add_child(UI.keycap("Enter", 16))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_BOTTOM_RIGHT, Vector2(16, 16))
 
@@ -161,11 +166,12 @@ func _show(k: int) -> void:
 	pivot.rotation.y = 0
 	var letter: String = Game.get_meta("letters")[who]
 	var ttl: String = Game.players[who].get("title", "무제")
-	title.text = "「%s」 — 작품 %s  (%d / %d)" % [ttl, letter, k + 1, order.size()]
+	title.text = ttl
+	count_l.text = "작품 %s   ·   %d / %d" % [letter, k + 1, order.size()]
 	if plaque:
 		plaque.text = "「%s」\n작품 %s · %s\n%s" % [ttl, letter, Themes.INFO[Game.theme]["name"], "재질: " + _finish_text(Game.players[who]["work"])]
 	var mine := who == 0
-	sub.text = ("내 작품이에요 — 평가는 안 해요" if mine else "「%s」처럼 보이나요?  별 위를 끌어서 점수를 매기세요" % Game.target["name"])
+	sub.text = ("내 작품이에요. 이번엔 구경만 해요" if mine else "%s처럼 보이나요? 별을 끌어서 점수를 주세요" % Game.target["name"])
 	rate_box.visible = not mine
 	_refresh()
 
@@ -180,7 +186,7 @@ func _refresh() -> void:
 	bar.max_v = Judge.TOP_CAP if top_used else 5.0
 	bar.set_value(Game.human_ratings.get(who, 3.0))
 	value_l.text = "%.1f" % bar.value
-	top_l.text = ("4.6점 이상은 한 작품만 — 이미 다른 작품에 줬어요" if top_used else "4.6점 이상은 한 작품에만 줄 수 있어요")
+	top_l.text = ("4.6점 이상은 이미 다른 작품에 줬어요" if top_used else "4.6점 이상은 한 작품에만 줄 수 있어요")
 
 
 func _rate(v: float) -> void:

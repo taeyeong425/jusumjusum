@@ -253,13 +253,13 @@ func _build_hud() -> void:
 	tv.add_child(hud_time)
 	var tcol := UI.vbox(0)
 	tv.add_child(tcol)
-	tcol.add_child(UI.label("「%s」를 만들어라" % Game.target["name"], 30, UI.INK, true))
-	tcol.add_child(UI.label("할당량 ★%.1f 이상 %d명 · 재료 %s" % [Game.quota[0], Game.quota[1], Game.formation], 20, UI.SOFT))
+	tcol.add_child(UI.label("%s 만들기" % Game.target["name"], 30, UI.INK, true))
+	tcol.add_child(UI.label("★%.1f 이상 %d명이면 통과" % [Game.quota[0], Game.quota[1]], 19, UI.SOFT))
 	var card: Dictionary = Game.human()["card"]
 	var ccol := UI.vbox(0)
 	tv.add_child(ccol)
-	ccol.add_child(UI.label("카드 「%s」 %s" % [card["name"], card["desc"]], 21, UI.ACCENT))
-	hud_card = UI.label("", 20, UI.SOFT)
+	ccol.add_child(UI.label("카드 · %s" % card["name"], 20, UI.INK, true))
+	hud_card = UI.label("", 19, UI.SOFT)
 	ccol.add_child(hud_card)
 	# 출품 제목 — 전시회 이름표에 나온다
 	title_edit = LineEdit.new()
@@ -275,7 +275,7 @@ func _build_hud() -> void:
 	var lv := UI.vbox(6)
 	left.add_child(lv)
 	lv.add_child(UI.label("모은 덩어리", 24, UI.INK, true))
-	lv.add_child(UI.label("눌러서 작업대에 올리기", 18, UI.SOFT))
+	lv.add_child(UI.label("눌러서 좌대에 올리기", 18, UI.SOFT))
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(210, 420)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -290,7 +290,7 @@ func _build_hud() -> void:
 	var right := UI.panel()
 	var rv := UI.vbox(6)
 	right.add_child(rv)
-	rv.add_child(UI.label("색 (1~0 키)", 22, UI.INK, true))
+	rv.add_child(UI.label("색", 22, UI.INK, true))
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 6)
@@ -298,7 +298,7 @@ func _build_hud() -> void:
 	rv.add_child(grid)
 	for i in 16:
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(40, 30)
+		b.custom_minimum_size = Vector2(42, 34)
 		b.focus_mode = Control.FOCUS_NONE
 		for st in ["normal", "hover", "pressed"]:
 			var sb := StyleBoxFlat.new()
@@ -309,13 +309,13 @@ func _build_hud() -> void:
 			b.add_theme_stylebox_override(st, sb)
 		var ci := i
 		b.pressed.connect(func(): _apply_color(ci))
-		var cell := UI.vbox(0)
-		cell.add_child(b)
-		var nl := UI.label(Data.palette()[i]["name"], 12, UI.SOFT)
-		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cell.add_child(nl)
+		b.tooltip_text = str(Data.palette()[i]["name"]) + (" (%d)" % ((i + 1) % 10) if i < 10 else "")
+		var cell := b
 		grid.add_child(cell)
-	rv.add_child(UI.label("마감 (고른 것 / Shift = 전체)", 18, UI.INK, true))
+	var fl := UI.label("재질", 20, UI.INK, true)
+	fl.tooltip_text = "Shift를 누르고 고르면 전체에 적용"
+	fl.mouse_filter = Control.MOUSE_FILTER_PASS
+	rv.add_child(fl)
 	var fin := HFlowContainer.new()
 	fin.add_theme_constant_override("h_separation", 4)
 	fin.add_theme_constant_override("v_separation", 4)
@@ -333,19 +333,20 @@ func _build_hud() -> void:
 	tools.add_theme_constant_override("h_separation", 6)
 	tools.add_theme_constant_override("v_separation", 6)
 	rv.add_child(tools)
-	tools.add_child(UI.button("왼쪽 45° (Q)", func(): _turn(-PI / 4), 18))
-	tools.add_child(UI.button("오른쪽 45° (E)", func(): _turn(PI / 4), 18))
-	tools.add_child(UI.button("똑바로 (T)", _straighten, 18))
-	tools.add_child(UI.button("내리기 (Del)", _delete, 18))
-	tools.add_child(UI.button("되돌리기", _undo, 18))
-	spin_btn = UI.button("돌려보기", func(): spin = not spin, 18)
-	tools.add_child(spin_btn)
-	tools.add_child(UI.button("바닥에 붙이기 (G)", _drop_down, 18))
-	tools.add_child(UI.button("옆에 딱 붙이기 (J)", _attach_nearest, 18))
+	for tb in [["왼쪽 45°", "Q", func(): _turn(-PI / 4)], ["오른쪽 45°", "E", func(): _turn(PI / 4)], ["똑바로", "T", _straighten], ["빼기", "Del", _delete],
+			["되돌리기", "Ctrl+Z", _undo], ["돌려보기", "", func(): spin = not spin], ["아래에 붙이기", "G", _drop_down], ["옆에 붙이기", "J", _attach_nearest]]:
+		var bt := UI.button(tb[0], tb[2], 18)
+		bt.tooltip_text = ("단축키 " + str(tb[1])) if tb[1] != "" else ""
+		bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tools.add_child(bt)
+		if tb[0] == "돌려보기":
+			spin_btn = bt
 	magnet_btn = UI.button("", _toggle_magnet, 18)
+	magnet_btn.tooltip_text = "단축키 M — 켜면 표면에 얹기 · 줄 맞춤"
+	magnet_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tools.add_child(magnet_btn)
 	_toggle_magnet(false)
-	rv.add_child(UI.label("시점 (Tab)", 18, UI.INK, true))
+	rv.add_child(UI.label("시점", 20, UI.INK, true))
 	var vrow := UI.hbox(4)
 	rv.add_child(vrow)
 	for vi in VIEWS.size():
@@ -361,8 +362,8 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("끌기 = 옮기기 (가까우면 딱 붙음, Alt = 안 붙게) · J = 옆에 딱 붙이기 · G = 아래에 붙이기 · 방향키 = 조금씩\n휠 · PageUp/Down = 높이 · 색 고리 = 회전 · 색 네모 = 늘이기 · Tab = 앞/옆/위 시점 · 빈 곳 끌기 = 시점", 17, UI.SOFT))
-	bv.add_child(UI.primary("다 했다 →", _finish, 26))
+	bv.add_child(UI.key_hints([["끌기", "옮기기"], ["J", "옆에 붙이기"], ["G", "아래에 붙이기"], ["방향키", "조금씩"], ["휠", "높이"], ["Tab", "시점"], ["Alt", "안 붙게"]], 18))
+	bv.add_child(UI.primary("출품하기", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
 
@@ -397,7 +398,7 @@ func _refresh_tray() -> void:
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.draw.connect(func(): UI.draw_chunk_icon(icon, it, Rect2(Vector2.ZERO, Vector2(40, 40))))
 		row.add_child(icon)
-		var l := UI.label("%s%s" % [it["name"], ("  · " + src) if src != "" else ""], 19)
+		var l := UI.label(str(it["name"]), 19)
 		l.position = Vector2(52, 10)
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(l)
@@ -486,7 +487,7 @@ func _spawn(inv_i: int, from: Dictionary = {}) -> Piece:
 		mode = "move"
 		pushed = true
 		grab_off = Vector3.ZERO
-		_note("클릭해서 놓기 · 휠 = 높이")
+		_note("클릭해서 놓기 · 휠로 높이")
 	return p
 
 
@@ -534,7 +535,7 @@ func _apply_finish(f: int) -> void:
 	selected.set_finish(f)
 	selected.set_highlight(true)
 	UI.sfx("select", -10.0)
-	_note("마감: " + Data.FINISHES[f])
+	_note("재질 " + Data.FINISHES[f])
 
 
 ## 모두에 같은 마감
@@ -544,7 +545,7 @@ func _finish_all(f: int) -> void:
 		(p as Piece).set_finish(f)
 	if selected:
 		selected.set_highlight(true)
-	_note("전체 마감: " + Data.FINISHES[f])
+	_note("전체 재질 " + Data.FINISHES[f])
 
 
 func _turn(a: float) -> void:
@@ -568,7 +569,7 @@ func _toggle_magnet(flip := true) -> void:
 		magnet = not magnet
 		_note("자석 맞춤 켬" if magnet else "자석 맞춤 끔")
 	if magnet_btn:
-		magnet_btn.text = "자석: %s (M)" % ("켬" if magnet else "끔")
+		magnet_btn.text = "자석 켬" if magnet else "자석 끔"
 
 
 func _select(p: Piece) -> void:
@@ -1282,7 +1283,7 @@ func _set_view(i: int) -> void:
 	yaw_t = float(VIEWS[i][1])
 	pitch_t = float(VIEWS[i][2])
 	center_t = Vector3(0, 0.5, 0) if not selected else Vector3(0, selected.global_position.y, 0)
-	_note("시점: " + str(VIEWS[i][0]))
+	_note(str(VIEWS[i][0]) + " 보기")
 
 
 func _next_view() -> void:
@@ -1370,7 +1371,7 @@ func _process(delta: float) -> void:
 	var dicts := _dicts()
 	var card: Dictionary = Game.human()["card"]
 	var ok := Judge.card_constraint(card, dicts, inventory.size(), Game.human().get("hunt", {}))
-	hud_card.text = "카드 조건 충족! (+0.5점)" if ok else "카드 조건 아직 (덩어리 3개 이상 + 조건)"
+	hud_card.text = ("✓ " if ok else "") + str(card["desc"]) + ("  +0.5점" if ok else "")
 	hud_card.add_theme_color_override("font_color", UI.GOOD if ok else UI.SOFT)
 	spin_btn.text = "멈추기" if spin else "돌려보기"
 	if selected:
@@ -1388,7 +1389,7 @@ func _finish(forced := false) -> void:
 	if finished:
 		return
 	if not forced and work_root.get_child_count() < MIN_PIECES:
-		_warn("최소 %d개는 올려야 낼 수 있어요" % MIN_PIECES)
+		_warn("덩어리를 %d개 이상 올려야 출품할 수 있어요" % MIN_PIECES)
 		return
 	finished = true
 	_select(null)
@@ -1509,12 +1510,13 @@ func _open_ceremony() -> void:
 	p.custom_minimum_size = Vector2(860, 0)
 	var v := UI.vbox(10)
 	p.add_child(v)
-	var t := UI.label("봉투 개봉식!", 40, UI.INK, true)
+	var t := UI.label("봉투 열기", 38, UI.INK, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	cer_note = UI.label("봉투를 눌러서 열어요 · Space = 하나씩 · A = 모두 열기", 20, UI.SOFT)
+	cer_note = UI.label("봉투를 눌러서 열어 보세요", 20, UI.SOFT)
 	cer_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(cer_note)
+	v.add_child(UI.key_hints([["Space", "하나씩"], ["A", "모두 열기"]], 18))
 	cer_row = HFlowContainer.new()
 	cer_row.alignment = FlowContainer.ALIGNMENT_CENTER
 	cer_row.add_theme_constant_override("h_separation", 10)
@@ -1538,13 +1540,13 @@ func _open_ceremony() -> void:
 		cer_row.add_child(b)
 	var sep := HSeparator.new()
 	v.add_child(sep)
-	v.add_child(UI.label("나온 파츠", 20, UI.INK, true))
+	v.add_child(UI.label("나온 덩어리", 20, UI.INK, true))
 	cer_parts = HFlowContainer.new()
 	cer_parts.add_theme_constant_override("h_separation", 8)
 	cer_parts.add_theme_constant_override("v_separation", 8)
 	cer_parts.custom_minimum_size = Vector2(0, 90)
 	v.add_child(cer_parts)
-	cer_btn = UI.primary("조립 시작 →", _close_ceremony, 24)
+	cer_btn = UI.primary("조립 시작", _close_ceremony, 24)
 	cer_btn.visible = false
 	var hb := UI.hbox(10)
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1582,7 +1584,7 @@ func _open_env(b: Button, env: Dictionary) -> void:
 	cer_envs.erase(env)
 	_refresh_tray()
 	if cer_envs.is_empty():
-		cer_note.text = "다 열었다! 파츠 %d개" % inventory.size()
+		cer_note.text = "다 열었어요 · 덩어리 %d개" % inventory.size()
 		cer_btn.visible = true
 
 

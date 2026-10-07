@@ -60,10 +60,12 @@ static func theme() -> Theme:
 	return t
 
 
+const MIN_SIZE := 18   # 화면 글자 최소 (×0.84 ≈ 15px) — 너무 작은 글씨가 조잡해 보였다
+
 static func label(text: String, size := 24, col := INK, bold := false) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", int(size * FONT_SCALE))
+	l.add_theme_font_size_override("font_size", int(maxi(size, MIN_SIZE) * FONT_SCALE))
 	l.add_theme_color_override("font_color", col)
 	if bold:
 		l.add_theme_font_override("font", Data.font_bold)
@@ -78,6 +80,46 @@ static func button(text: String, cb: Callable, size := 24) -> Button:
 	b.pressed.connect(func(): UI.sfx("click", -6.0))
 	b.pressed.connect(cb)
 	return b
+
+
+## 키 모양 칩 (F · Tab · Space …)
+static func keycap(key: String, size := 18) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#FFFFFF")
+	sb.border_color = Color("#C9D0D6")
+	sb.set_border_width_all(1)
+	sb.border_width_bottom = 3
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 4
+	p.add_theme_stylebox_override("panel", sb)
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var l := label(key, size, INK, true)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(l)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
+
+
+## 조작 안내 한 줄: [["F", "줍기"], ["Tab", "근처 목록"], …]
+static func key_hints(pairs: Array, size := 18) -> HBoxContainer:
+	var row := hbox(18)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for pr in pairs:
+		var it := hbox(6)
+		it.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for k in str(pr[0]).split("+"):
+			it.add_child(keycap(k, size - 2))
+		var l := label(str(pr[1]), size, SOFT)
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		it.add_child(l)
+		row.add_child(it)
+	return row
 
 
 static func panel() -> PanelContainer:

@@ -63,6 +63,7 @@ var detect_t := 0.0
 var hud_time: Label
 var hud_prompt: Label
 var hud_left: Label
+var prompt_key: Control
 var hud_bar: ProgressBar
 var fx: Control
 var bag_panel: PanelContainer
@@ -1080,8 +1081,8 @@ func _take(a: Dictionary, e: Dictionary) -> void:
 		Sfx.play("pick" if e["tier"] != "gold" else "star", -2.0)
 		slot = _envs(a).size() - 1
 		_refresh_hotbar()
-		var more := {"note": "", "env": " — 파츠 2개!", "gold": " — 파츠 3개!!"}
-		_toast("%s 찾았다%s  (%d/%d)" % [e["name"], more[e["tier"]], _envs(a).size(), BAG_MAX])
+		var more := {"note": "", "env": " · 덩어리 2개", "gold": " · 덩어리 3개"}
+		_toast("%s 찾았어요%s" % [e["name"], more[e["tier"]]])
 		_pop("+ " + e["name"], a["body"].global_position + Vector3(0, 2.5, 0))
 		_squash(a["vis"], 0.9)
 
@@ -1104,10 +1105,10 @@ func _open(a: Dictionary, e: Dictionary) -> void:
 	if not a["bot"]:
 		if inside.is_empty():
 			Sfx.play("drop", -10.0)
-			_toast("%s — 비어 있다…" % e["name"])
+			_toast("%s 안은 비어 있어요" % e["name"])
 		else:
 			Sfx.play("tear", -4.0)
-			_toast("%s 안에 %s!" % [e["name"], (inside[0] as Dictionary)["name"]])
+			_toast("%s 안에서 %s 발견" % [e["name"], (inside[0] as Dictionary)["name"]])
 	elif not inside.is_empty():
 		# 봇은 열자마자 집어 간다
 		a["goal"] = {"ref": inside[0]}
@@ -1128,7 +1129,7 @@ func _physics_process(delta: float) -> void:
 			body.velocity = Vector3.ZERO
 			body.reset_physics_interpolation()
 			if not a["bot"]:
-				_toast("풍덩! 처음 자리로")
+				_toast("풍덩! 출발 지점으로 돌아왔어요")
 				Sfx.play("land", 0.0)
 	_update_levels(delta)
 	_update_walls(delta)
@@ -1257,7 +1258,7 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		return
 	if act["kind"] == "treasure":
 		if _envs(a).size() >= BAG_MAX:
-			_toast("가방이 꽉 찼다 — [Q]로 하나 내려놓기")
+			_toast("가방이 가득 찼어요 · Q로 하나 내려놓기")
 			Sfx.play("error", -6.0)
 			_cancel_act()
 			return
@@ -1440,16 +1441,20 @@ func _update_aim() -> void:
 	var target: Dictionary = aim if not aim.is_empty() else act
 	if target.is_empty() or not is_instance_valid(target["node"]):   # 방금 주워서 지워진 것
 		hud_prompt.text = ""
+		prompt_key.visible = false
 		return
 	var me: Vector3 = actors[0]["body"].global_position
 	var far: bool = (target["node"] as Node3D).global_position.distance_to(me) > REACH
-	var verb := "[F] 가서 " if far else "[F] "
+	var what: String = "줍기" if target["kind"] == "treasure" else "열기"
+	# 키 칩 [F] + "사물함 열기" / "사물함까지 가서 열기" / "사물함으로 가는 중"
+	prompt_key.visible = true
 	if target == act and aim.is_empty():
-		verb = "여는 중 — " if hold_prog > 0.0 else "가는 중 — "
-	if target["kind"] == "treasure":
-		hud_prompt.text = "%s줍기 — %s" % [verb, target["name"]]
+		prompt_key.visible = false
+		hud_prompt.text = "%s %s" % [target["name"], "여는 중" if hold_prog > 0.0 else "(으)로 가는 중"]
+	elif far:
+		hud_prompt.text = "%s까지 가서 %s" % [target["name"], what]
 	else:
-		hud_prompt.text = "%s열기 — %s" % [verb, target["name"]]
+		hud_prompt.text = "%s %s" % [target["name"], what]
 
 
 ## 레이가 빗나갔을 때: 조준점에서 화면상 48px 안, 가장 가까운 것
@@ -1513,7 +1518,7 @@ func _try_pick_entry(e: Dictionary) -> void:
 		return
 	if e["kind"] == "treasure" and _envs(actors[0]).size() >= BAG_MAX:
 		Sfx.play("error", -6.0)
-		_toast("가방이 꽉 찼다 — [Q]로 하나 내려놓기")
+		_toast("가방이 가득 찼어요 · Q로 하나 내려놓기")
 		return
 	if act != e:
 		_cancel_act()
@@ -1543,7 +1548,7 @@ func _drop_selected() -> void:
 	_add_treasure(it["tier"], body.global_position + fwd * 1.2, _level_of(body.global_position.y), it["parts"])
 	Sfx.play("drop", -4.0)
 	_refresh_hotbar()
-	_toast("%s 내려놓음" % it["name"])
+	_toast("%s 내려놓았어요" % it["name"])
 
 
 # ── 카메라 ───────────────────────────────────────────
@@ -1647,13 +1652,17 @@ func _build_hud() -> void:
 	hud_time = UI.label("", 38, UI.INK, true)
 	tv.add_child(hud_time)
 	var th: Dictionary = Themes.INFO[Game.theme]
-	tv.add_child(UI.label("보물찾기 · %s" % th["name"], 22, UI.ACCENT, true))
-	tv.add_child(UI.label("만들 것: 「%s」" % Game.target["name"], 24, UI.INK, true))
-	var card: Dictionary = Game.human()["card"]
-	tv.add_child(UI.label("카드 「%s」 %s" % [card["name"], card["desc"]], 18, UI.SOFT))
-	hud_left = UI.label("", 18, UI.SOFT)
+	tv.add_child(UI.label("%s 만들기" % Game.target["name"], 26, UI.INK, true))
+	hud_left = UI.label("", 19, UI.SOFT)
 	tv.add_child(hud_left)
-	tv.add_child(UI.button("보물찾기 끝내기 →", _end, 18))
+	var card: Dictionary = Game.human()["card"]
+	var cl := UI.label("카드 · %s" % card["desc"], 18, UI.SOFT)
+	cl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cl.custom_minimum_size.x = 230
+	tv.add_child(cl)
+	var endb := UI.button("일찍 끝내기", _end, 18)
+	endb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	tv.add_child(endb)
 	layer.add_child(tl)
 	UI.corner(tl, Control.PRESET_TOP_LEFT)
 
@@ -1683,20 +1692,25 @@ func _build_hud() -> void:
 		cell.gui_input.connect(func(ev): _slot_input(ev, idx))
 		hotbar.add_child(cell)
 		hot_slots.append(cell)
-	var help := UI.label("마우스: 시점 · [F]/클릭: 줍기·열기 · [Tab] 근처 목록 · WASD 이동 · Space 점프(사다리는 앞으로) · [Q] 내려놓기", 16, UI.SOFT)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bv.add_child(help)
+	bv.add_child(UI.key_hints([["WASD", "이동"], ["F", "줍기 · 열기"], ["Space", "점프"], ["Tab", "근처 목록"], ["Q", "내려놓기"]], 18))
 	layer.add_child(bar)
 	UI.corner(bar, Control.PRESET_CENTER_BOTTOM, Vector2(0, 10))
 
 	var cv := UI.vbox(6)
 	cv.alignment = BoxContainer.ALIGNMENT_END
 	cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var prow := UI.hbox(10)
+	prow.alignment = BoxContainer.ALIGNMENT_CENTER
+	prow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	prompt_key = UI.keycap("F", 24)
+	prompt_key.visible = false
+	prow.add_child(prompt_key)
 	hud_prompt = UI.label("", 26, UI.INK, true)
 	hud_prompt.add_theme_color_override("font_outline_color", Color.WHITE)
 	hud_prompt.add_theme_constant_override("outline_size", 8)
 	hud_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cv.add_child(hud_prompt)
+	prow.add_child(hud_prompt)
+	cv.add_child(prow)
 	hud_bar = ProgressBar.new()
 	hud_bar.visible = false
 	cv.add_child(hud_bar)
@@ -1711,8 +1725,8 @@ func _build_hud() -> void:
 	bag_panel = UI.panel()
 	var bpv := UI.vbox(4)
 	bag_panel.add_child(bpv)
-	bpv.add_child(UI.label("근처 (5m)", 24, UI.INK, true))
-	bpv.add_child(UI.label("클릭 = 줍기 · 열기   [Tab] 닫기", 16, UI.SOFT))
+	bpv.add_child(UI.label("근처에 있는 것", 24, UI.INK, true))
+	bpv.add_child(UI.label("눌러서 줍기 · 열기", 18, UI.SOFT))
 	bag_list = UI.vbox(3)
 	bpv.add_child(bag_list)
 	bag_panel.custom_minimum_size = Vector2(320, 0)
@@ -1723,9 +1737,12 @@ func _build_hud() -> void:
 	var tip := UI.panel()
 	var tipv := UI.vbox(4)
 	tip.add_child(tipv)
-	tipv.add_child(UI.label("보물찾기 — %s" % Themes.INFO[Game.theme]["name"], 26, UI.INK, true))
-	tipv.add_child(UI.label(Themes.INFO[Game.theme]["desc"], 18, UI.SOFT))
-	tipv.add_child(UI.label("마우스 = 둘러보기 · 조준해서 [F] = 줍기 / 열기 · [Tab] = 근처 목록\nWASD 이동 · Space 점프 (의자 → 책상처럼 가구를 밟고 오르기) · 공은 차면 날아가요\n매트 · 상자는 밀 수 있어요 — 밑에 쪽지가 깔려 있을지도!", 18, UI.INK))
+	var tt := UI.label(Themes.INFO[Game.theme]["name"], 30, UI.INK, true)
+	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tipv.add_child(tt)
+	var tdl := UI.label("서랍 · 사물함 · 상자를 열어 봉투를 찾으세요\n가구를 밟고 높은 곳에 올라가 보고, 상자를 밀면 밑에 쪽지가 있을지도 몰라요", 19, UI.SOFT)
+	tdl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tipv.add_child(tdl)
 	layer.add_child(tip)
 	UI.corner(tip, Control.PRESET_CENTER_TOP, Vector2(0, 16))
 	tip.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -1784,7 +1801,7 @@ func _update_hud(delta: float) -> void:
 			warned[w] = true
 			Sfx.play("tick" if w <= 5 else "error", -2.0)
 			if w == 30 or w == 10:
-				_toast("보물찾기 %d초 남았어요!" % w)
+				_toast("%d초 남았어요" % w)
 	hud_time.text = UI.clock(time_left)
 	hud_time.add_theme_color_override("font_color", UI.BAD if time_left < 30 else UI.INK)
 	var left := 0
@@ -1794,7 +1811,7 @@ func _update_hud(delta: float) -> void:
 	var mine := 0
 	for env in _envs(actors[0]):
 		mine += (env["parts"] as Array).size()
-	hud_left.text = "남은 보물 %d / %d · 내 봉투 %d (파츠 %d)" % [left, treasures.size(), _envs(actors[0]).size(), mine]
+	hud_left.text = "내 봉투 %d / %d   ·   남은 보물 %d" % [_envs(actors[0]).size(), BAG_MAX, left]
 	toast_t -= delta
 	if toast_t <= 0:
 		toast.text = ""

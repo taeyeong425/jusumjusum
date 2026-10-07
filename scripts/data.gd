@@ -100,6 +100,10 @@ static func load_fonts() -> void:
 		# v0.5: 손글씨(Gaegu) → 나눔고딕. "UI · 폰트가 유치하다" 피드백
 		font_regular = load("res://assets/fonts/NanumGothic-Regular.ttf")
 		font_bold = load("res://assets/fonts/NanumGothic-Bold.ttf")
+		for f in [font_regular, font_bold]:   # 선명하게: 가벼운 힌팅 · 서브픽셀 위치
+			if f is FontFile:
+				(f as FontFile).hinting = TextServer.HINTING_LIGHT
+				(f as FontFile).subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
 
 
 # ── 메시 ──────────────────────────────────────────────

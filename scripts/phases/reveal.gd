@@ -26,17 +26,20 @@ func _ready() -> void:
 	var top := UI.hbox(20)
 	col.add_child(top)
 	var th: Dictionary = Themes.INFO[Game.theme]
-	top.add_child(UI.label("%d라운드 · 보물찾기 장소: %s" % [Game.round_i, th["name"]], 34, Color(chalk, 0.9), true))
+	top.add_child(UI.label("%d / 3 라운드" % Game.round_i, 26, Color(chalk, 0.75), true))
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(sp)
 	timer_label = UI.label("", 30, Color(chalk, 0.8))
 	top.add_child(timer_label)
 
-	var tgt := UI.label("「%s」를 만들어라" % Game.target["name"], 88, chalk, true)
+	var pre := UI.label("이번에 만들 물건", 26, Color(chalk, 0.7))
+	pre.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(pre)
+	var tgt := UI.label(str(Game.target["name"]), 92, chalk, true)
 	tgt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(tgt)
-	var how := UI.label("%s — 쪽지 · 편지봉투 · 금봉투를 찾아라 (모두 %d개). 봉투 속 파츠로 만든다" % [th["desc"], Themes.treasure_count(Game.PLAYERS)], 22, Color(chalk, 0.85))
+	var how := UI.label("%s에서 봉투를 모아 오세요. 봉투 속 덩어리가 재료가 돼요" % th["name"], 24, Color(chalk, 0.8))
 	how.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	how.custom_minimum_size.x = 900
@@ -83,8 +86,9 @@ func _ready() -> void:
 	row.add_child(fp)
 	var fv := UI.vbox(6)
 	fp.add_child(fv)
-	fv.add_child(UI.label("이번 판 재료: %s" % Game.formation, 30, UI.INK, true))
-	fv.add_child(UI.label(Data.FORMATIONS[Game.formation], 22, UI.SOFT))
+	fp.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	fv.add_child(UI.label("재료 · %s" % Game.formation, 26, UI.INK, true))
+	fv.add_child(UI.label(Data.FORMATIONS[Game.formation], 19, UI.SOFT))
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 24)
@@ -94,7 +98,7 @@ func _ready() -> void:
 		mx = maxi(mx, Game.counts[t])
 	for t in Data.TYPES:
 		var h := UI.hbox(8)
-		var n := UI.label(Data.NAMES[t], 22)
+		var n := UI.label(Data.NAMES[t], 19)
 		n.custom_minimum_size.x = 70
 		h.add_child(n)
 		var bar := ColorRect.new()
@@ -102,7 +106,7 @@ func _ready() -> void:
 		bar.custom_minimum_size = Vector2(maxf(4.0, 160.0 * c / mx), 18)
 		bar.color = UI.BAD if c <= 3 else (UI.ACCENT if c >= 40 else Color("#9AA5AF"))
 		h.add_child(bar)
-		h.add_child(UI.label(str(c), 20, UI.SOFT))
+		h.add_child(UI.label(str(c), 18, UI.SOFT))
 		grid.add_child(h)
 
 	# 할당량 + 카드
@@ -113,26 +117,27 @@ func _ready() -> void:
 	rp.add_child(qp)
 	var qv := UI.vbox(4)
 	qp.add_child(qv)
-	qv.add_child(UI.label("할당량", 26, UI.SOFT))
-	qv.add_child(UI.label("★%.1f 이상이 %d명" % [Game.quota[0], Game.quota[1]], 44, UI.INK, true))
-	var ql := UI.label("6명 중 %d명이 넘으면 할당량 통과\n(3라운드는 무조건 진행)" % Game.quota[1], 20, UI.SOFT)
-	qv.add_child(ql)
+	qv.add_child(UI.label("통과 조건", 20, UI.SOFT))
+	qv.add_child(UI.label("★%.1f 이상 %d명" % [Game.quota[0], Game.quota[1]], 40, UI.INK, true))
+	qv.add_child(UI.label("6명 중 %d명이 별점 %.1f을 넘기면 통과" % [Game.quota[1], Game.quota[0]], 19, UI.SOFT))
 
 	var card: Dictionary = Game.human()["card"]
 	var cp := UI.panel()
 	rp.add_child(cp)
 	var cv := UI.vbox(4)
 	cp.add_child(cv)
-	cv.add_child(UI.label("내 비밀 카드", 26, UI.SOFT))
-	cv.add_child(UI.label("「%s」" % card["name"], 38, UI.ACCENT, true))
-	cv.add_child(UI.label("%s\n→ 성공하면 전체 등수 +0.5점" % card["desc"], 22))
-	cv.add_child(UI.label("달성하면 티켓 1장. 티켓 3장 = 할당량 한 단계 낮추기", 20, UI.SOFT))
-	cv.add_child(UI.label("방 전체 티켓: %d장" % Game.tickets, 22, UI.SOFT))
+	cv.add_child(UI.label("내 비밀 카드", 20, UI.SOFT))
+	cv.add_child(UI.label(str(card["name"]), 34, UI.ACCENT, true))
+	cv.add_child(UI.label(str(card["desc"]), 21))
+	cv.add_child(UI.label("성공하면 +0.5점 · 티켓 %d / 3" % Game.tickets, 19, UI.SOFT))
 
-	var go := UI.primary("보물찾기 시작 →  [Enter]", _go, 30)
-	var cc := CenterContainer.new()
-	cc.add_child(go)
-	col.add_child(cc)
+	var go := UI.primary("보물찾기 시작", _go, 30)
+	go.custom_minimum_size = Vector2(280, 0)
+	var gr := UI.hbox(12)
+	gr.alignment = BoxContainer.ALIGNMENT_CENTER
+	gr.add_child(go)
+	gr.add_child(UI.keycap("Enter", 18))
+	col.add_child(gr)
 
 
 func _process(delta: float) -> void:
