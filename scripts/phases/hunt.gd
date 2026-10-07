@@ -144,8 +144,10 @@ func _indoor_env() -> void:
 			env.fog_density = 0.0035
 			env.fog_sky_affect = 0.0
 		if c is DirectionalLight3D:
-			(c as DirectionalLight3D).light_energy = 0.6
-			(c as DirectionalLight3D).directional_shadow_max_distance = 30.0
+			# 실내는 햇빛 그림자 끔: 그림자 거리(30m) 경계가 카메라 따라 움직이며 먼 바닥이 천장 그늘 ↔ 햇빛으로 깜빡였다.
+			# 대신 캐릭터마다 발밑 원형 그림자 (_blob_shadow)
+			(c as DirectionalLight3D).light_energy = 0.4
+			(c as DirectionalLight3D).shadow_enabled = false
 
 
 func _exit_tree() -> void:
@@ -1012,7 +1014,9 @@ func _spawn_actors() -> void:
 		body.position = sp + Vector3(Game.rng.randf_range(-0.6, 0.6), 0.2, Game.rng.randf_range(-0.6, 0.6))
 		world.add_child(body)
 		body.set_meta("label", name_l)
-		actors.append({"i": i, "body": body, "vis": vis, "bot": p["is_bot"] or Game.autotest,
+		var blob := _blob_shadow()
+		world.add_child(blob)
+		actors.append({"i": i, "body": body, "vis": vis, "blob": blob, "bot": p["is_bot"] or Game.autotest,
 			"goal": {}, "prog": 0.0, "wait": Game.rng.randf_range(0.0, 1.0), "walk_t": 0.0,
 			"spawn": sp})
 	cam_yaw = float(info.get("cam_yaw", 0.0))
@@ -1089,17 +1093,13 @@ func _physics_process(delta: float) -> void:
 		if body.global_position.y < -0.6:   # 물(바닥 아래)에 빠지면 바로 처음 자리로
 			body.global_position = a["spawn"] + Vector3(0, 0.5, 0)
 			body.velocity = Vector3.ZERO
+			body.reset_physics_interpolation()
 			if not a["bot"]:
 				_toast("풍덩! 처음 자리로")
 				Sfx.play("land", 0.0)
-	_update_camera()
 	_update_levels(delta)
 	_update_walls(delta)
-	# 큰 가구 · 조형물이 캐릭터를 가리면 그 부분만 작게 비친다 (벽은 카메라가 부딪혀서 해당 없음)
-	RenderingServer.global_shader_parameter_set("seethru_on", 1.0)
-	RenderingServer.global_shader_parameter_set("seethru_pos", (actors[0]["body"] as Node3D).global_position + Vector3(0, 0.9, 0))
 	_update_pushables(delta)
-	_update_aim()
 	_update_hud(delta)
 	if time_left <= 0:
 		_end()
@@ -1446,10 +1446,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				if looking or bag_open:
-					_try_pick()
-				else:
-					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+				if not looking and not bag_open:
+					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # 커서 숨김 (웹은 클릭해야 잠긴다)
+				_try_pick()
 			MOUSE_BUTTON_WHEEL_UP:
 				_select_slot(posmod(slot - 1, maxi(1, _envs(actors[0]).size())))
 			MOUSE_BUTTON_WHEEL_DOWN:
@@ -1512,10 +1511,73 @@ func _drop_selected() -> void:
 
 # ── 카메라 ───────────────────────────────────────────
 
-func _update_camera() -> void:
+## 카메라 · 투시 · 조준은 화면 프레임마다 (물리 틱마다 하면 고주사율 화면에서 떨리고 깜빡인다)
+func _process(delta: float) -> void:
+	if finished or not ready_done:
+		return
+	_update_camera(delta)
+	_update_blobs()
+	# 큰 가구 · 조형물이 캐릭터를 가리면 그 부분만 작게 비친다 (벽은 카메라가 부딪혀서 해당 없음)
+	RenderingServer.global_shader_parameter_set("seethru_on", 1.0)
+	RenderingServer.global_shader_parameter_set("seethru_pos", vis_pos + Vector3(0, 0.9, 0))
+	_update_aim()
+
+
+var vis_pos := Vector3.ZERO
+
+static var _blob_mat: StandardMaterial3D
+## 발밑 그림자: 부드러운 검은 원 (바닥 · 가구 윗면에 붙는다)
+func _blob_shadow() -> MeshInstance3D:
+	if _blob_mat == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0, 0, 0, 0.55))
+		g.set_color(1, Color(0, 0, 0, 0.0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		tex.width = 64
+		tex.height = 64
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.albedo_texture = tex
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	var m := MeshInstance3D.new()
+	var q := PlaneMesh.new()
+	q.size = Vector2(0.9, 0.9)
+	m.mesh = q
+	m.material_override = _blob_mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	return m
+
+
+func _update_blobs() -> void:
+	var space := get_world_3d().direct_space_state
+	for a in actors:
+		var body: CharacterBody3D = a["body"]
+		var blob: MeshInstance3D = a["blob"]
+		var p := body.get_global_transform_interpolated().origin
+		var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 0.3, 0), p + Vector3(0, -6, 0), ALL_WORLD & ~L_WALL | L_PUSH)
+		q.exclude = [body.get_rid()]
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			blob.visible = false
+			continue
+		var drop: float = p.y - (hit["position"] as Vector3).y
+		blob.visible = true
+		blob.global_position = (hit["position"] as Vector3) + Vector3(0, 0.02, 0)
+		var k := clampf(1.0 - drop / 4.0, 0.3, 1.0)   # 높이 뛸수록 작고 옅게
+		blob.scale = Vector3(k, 1, k)
+
+func _update_camera(delta := 1.0 / 60.0) -> void:
 	var body: CharacterBody3D = actors[0]["body"]
-	var target := body.global_position + Vector3(0, 2.05, 0)
-	cam_pivot.global_position = cam_pivot.global_position.lerp(target, 0.35) if cam_pivot.global_position.distance_to(target) < 6 else target
+	vis_pos = body.get_global_transform_interpolated().origin
+	var target := vis_pos + Vector3(0, 2.05, 0)
+	var k := 1.0 - pow(0.65, delta * 60.0)   # 60fps 기준 0.35 — 프레임레이트와 무관하게 같은 느낌
+	cam_pivot.global_position = cam_pivot.global_position.lerp(target, k) if cam_pivot.global_position.distance_to(target) < 6 else target
 	cam_pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
 	spring.spring_length = lerpf(spring.spring_length, zoom, 0.2)
 
@@ -1825,6 +1887,7 @@ func run_scenario(sc: String) -> void:
 			best["hold"] = 3.0
 			var np: Vector3 = (best["node"] as Node3D).global_position
 			body.global_position = np + Basis(Vector3.UP, float(best["yaw"])) * Vector3(0, 0, 1.4)
+			body.reset_physics_interpolation()
 			body.global_position.y = level_y(int(best["lvl"])) + 0.1
 			cam_yaw = float(best["yaw"]) + 0.5
 			zoom = 4.5
@@ -1843,6 +1906,7 @@ func run_scenario(sc: String) -> void:
 			var bl: RigidBody3D = balls[balls.size() / 2]   # 체육관 가운데 공 (복도 공은 벽에 막힌다)
 			var b0 := bl.global_position
 			body.global_position = b0 + Vector3(0, 0, 3.0)
+			body.reset_physics_interpolation()
 			cam_yaw = 0.0
 			for i in 40:
 				await get_tree().physics_frame
@@ -2223,7 +2287,7 @@ func _low_ledge(body: CharacterBody3D, dir: Vector3) -> bool:
 func _draw_fx() -> void:
 	var mouse := _aim_pos()
 	var tearing := not act.is_empty() and hold_prog > 0.0 and is_instance_valid(act["node"])
-	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	var looking := not bag_open
 	if looking:
 		var on: bool = not aim.is_empty() and not aim.get("bolted", false)
 		fx.draw_circle(mouse, 3.5, Color(1, 1, 1, 0.95))
@@ -2297,13 +2361,14 @@ func _draw_hand(at: Vector2, s: float, grip: float, rot: float) -> void:
 
 ## 조준점: 시점 조작 중이면 화면 가운데, 커서를 풀었으면 커서
 func _aim_pos() -> Vector2:
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if not bag_open:   # 마우스는 시점만 돌린다 — 줍기는 늘 화면 가운데 조준점 (정면에 보이는 것)
 		return get_viewport().get_visible_rect().size * 0.5
 	return get_viewport().get_mouse_position()
 
 
 func _build_camera() -> void:
 	cam_pivot = Node3D.new()
+	cam_pivot.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF   # _process에서 직접 움직인다
 	add_child(cam_pivot)
 	spring = SpringArm3D.new()
 	spring.spring_length = zoom

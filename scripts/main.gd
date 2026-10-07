@@ -66,6 +66,9 @@ func goto(phase: String) -> void:
 	var scr: GDScript = load(PHASES[phase])
 	current = scr.new()
 	current.name = phase
+	# 물리 보간은 보물찾기에서만 (캐릭터가 화면 주사율로 부드럽게). 다른 단계는 _process · 트윈으로 움직인다
+	if phase != "collect":
+		current.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(current)
 	if Game.autotest:
 		print("[autotest] phase → %s (round %d) f%d" % [phase, Game.round_i, Engine.get_frames_drawn()])

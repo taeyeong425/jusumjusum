@@ -39,12 +39,15 @@ void fragment() {
 		float aspect = VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
 		vec2 dd = (fp.xy / fp.w - pp.xy / pp.w) * vec2(aspect, 1.0);
 		float r = length(dd);
-		if (-VERTEX.z < -pv.z - 1.2) {
-			float edge = smoothstep(0.16, 0.26, r);
-			float n = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
-			if (n > edge) {
-				discard;
-			}
+		// 캐릭터보다 앞(카메라 쪽)에 있을수록, 화면에서 캐릭터에 가까울수록 비친다.
+		// 디더는 고정 4x4 바이어 패턴 — 무작위 노이즈는 카메라가 움직일 때 반짝거렸다.
+		float front = smoothstep(1.0, 1.6, (-pv.z) - (-VERTEX.z));
+		float edge = mix(1.0, smoothstep(0.16, 0.26, r), front);
+		ivec2 q = ivec2(FRAGCOORD.xy) % 4;
+		int bi = q.x + q.y * 4;
+		float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+		if ((bayer[bi] + 0.5) / 16.0 > edge) {
+			discard;
 		}
 	}
 	vec3 col = albedo.rgb;
