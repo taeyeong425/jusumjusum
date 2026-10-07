@@ -65,7 +65,7 @@ static func build(h) -> Dictionary:
 static func _statue(h, p: Vector3, kind: int) -> void:
 	match kind:
 		0:
-			h.box(p + Vector3(0, 0.45, 0), Vector3(0.42, 0.55, 0.26), Color("#F2EEE6"), 0.0, false, 0.08)
+			h.box(p + Vector3(0, 0.45, 0), Vector3(0.42, 0.55, 0.26), Color("#F2EEE6"), 0.0, true, 0.08)
 			h.ball(p + Vector3(0, 0.92, 0), 0.17, Color("#F2EEE6"), Vector3(1, 1.15, 1))
 			h.box(p + Vector3(0, 0.1, 0), Vector3(0.36, 0.2, 0.22), Color("#F2EEE6"), 0.0, false, 0.04)
 		1:

@@ -509,6 +509,10 @@ func stairs(bottom: Vector3, top: Vector3, width: float, c) -> void:
 		var p := bottom + dir * run * f
 		var hgt := rise * (i + 1) / n
 		_box_raw(Vector3(p.x, bottom.y + hgt * 0.5, p.z), Vector3(run / n + 0.02, hgt, width), _col(c).darkened(0.05 * (i % 2)), yaw, false, 0.02)
+		# 계단 몸통은 단단하게 — 옆 · 밑으로 통과하지 않게. 윗면은 경사판 아래(한 단 낮게)라 오를 때 덜컹거리지 않는다
+		var sh := rise * i / n
+		if sh > 0.05:
+			_solid(Vector3(p.x, bottom.y + sh * 0.5, p.z), Vector3(run / n + 0.02, sh, width), yaw)
 	furn = false
 	_ramp(lvl_roots[lvl], bottom + Vector3(0, -0.12, 0) - dir * 0.3, top, width)
 	furn = true
@@ -1404,6 +1408,8 @@ func _update_aim() -> void:
 				best = e
 	if best.is_empty():
 		best = _near_cursor(mouse)
+	if not aim.is_empty() and not is_instance_valid(aim["node"]):
+		aim = {}
 	if best != aim:
 		if not aim.is_empty() and is_instance_valid(aim["node"]) and aim != act:
 			(aim["node"] as Piece).set_highlight(false)
@@ -1411,7 +1417,7 @@ func _update_aim() -> void:
 		if not aim.is_empty():
 			(aim["node"] as Piece).set_highlight(true)
 	var target: Dictionary = aim if not aim.is_empty() else act
-	if target.is_empty():
+	if target.is_empty() or not is_instance_valid(target["node"]):   # 방금 주워서 지워진 것
 		hud_prompt.text = ""
 		return
 	var me: Vector3 = actors[0]["body"].global_position
@@ -2013,6 +2019,9 @@ func _scenario_reach() -> void:
 		if s.begins_with("--lvl="):   # 특정 층 목표만 (막힘 재현용)
 			var want := int(s.substr(6))
 			pool = pool.filter(func(e): return int(e["lvl"]) == want)
+		if s.begins_with("--name="):
+			var nm := s.substr(7)
+			pool = pool.filter(func(e): return str(e["name"]) == nm)
 	var ok := 0
 	var stuck := []
 	var times := []
@@ -2038,6 +2047,8 @@ func _scenario_reach() -> void:
 		if not e["alive"]:
 			ok += 1
 			times.append(t)
+			if OS.get_cmdline_user_args().has("--each"):
+				print("[each] %s @%s %.1f초" % [e["name"], str((e["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)), t])
 		else:
 			var b: CharacterBody3D = me["body"]
 			var pth: PackedVector3Array = me.get("path", PackedVector3Array())
@@ -2045,7 +2056,7 @@ func _scenario_reach() -> void:
 			for q in pth:
 				ps.append(str(q.snapped(Vector3.ONE * 0.5)))
 			print("[path] ", e["name"], " pi=", me.get("pi", -1), " ", ", ".join(ps.slice(0, 40)))
-			print("[trail] ", " ".join(trail.slice(-16)))
+			print("[trail] ", " ".join(trail.slice(-50)))
 			stuck.append("%s L%d @%s (나 %s)" % [e["name"], e["lvl"], str((e["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)), str(b.global_position.snapped(Vector3.ONE * 0.1))])
 			_cancel_act()
 	times.sort()

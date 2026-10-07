@@ -37,15 +37,16 @@ static func build(h) -> Dictionary:
 	h.floor_rect(Rect2(-16, -5.4, 30, 10.8), 0.0, 0, Color("#6E4A2A"), Color("#5E3F24"), 0.7)
 	h.wall(Vector2(-17.2, -5.6), Vector2(15.0, -5.6), -0.3, DECK_Y + 0.3, HULL, 0.35)
 	h.wall(Vector2(-17.2, 5.6), Vector2(15.0, 5.6), -0.3, DECK_Y + 0.3, HULL, 0.35)
-	h.wall(Vector2(-17.2, -5.6), Vector2(15.0, -5.6), DECK_Y, 1.3, HULL, 0.35, [[11.2, 1.8]])
-	h.wall(Vector2(-17.2, 5.6), Vector2(15.0, 5.6), DECK_Y, 1.3, HULL, 0.35, [[24.7, 1.8]])
+	h.wall(Vector2(-17.2, -5.6), Vector2(15.0, -5.6), DECK_Y, 1.3, HULL, 0.35, [[11.2, 1.8], [24.7, 1.8]])
+	h.wall(Vector2(-17.2, 5.6), Vector2(15.0, 5.6), DECK_Y, 1.3, HULL, 0.35, [[14.2, 1.8], [24.7, 1.8]])
 	h.wall(Vector2(-17.2, -5.6), Vector2(-17.2, 5.6), -0.3, QD_Y + 1.0, HULL, 0.35)
 	h.wall(Vector2(15.0, -5.6), Vector2(20.5, 0.0), -0.3, DECK_Y + 1.3, HULL, 0.35)
 	h.wall(Vector2(15.0, 5.6), Vector2(20.5, 0.0), -0.3, DECK_Y + 1.3, HULL, 0.35)
 	h.wall(Vector2(14.0, -5.4), Vector2(14.0, 5.4), 0.0, DECK_Y, HULL)
-	# 건널판 (부두 → 갑판)
-	h.stairs(Vector3(-6.0, 0, -13.5), Vector3(-6.0, DECK_Y, -5.3), 1.5, Color("#8E6136"))
-	h.stairs(Vector3(7.5, 0, 13.5), Vector3(7.5, DECK_Y, 5.3), 1.5, Color("#8E6136"))
+	# 건널판 (부두 → 갑판): 양쪽 부두 모두 두 개씩 (북 x -6 · 7.5, 남 x -3 · 7.5 — 남쪽 x -6은 뒷갑판 계단 자리).
+	# 한쪽에 하나씩만 있을 땐 반대편 부두로 가려면 창고 끝까지 빙 돌아야 했다
+	for g in [[-6.0, -1.0], [7.5, -1.0], [-3.0, 1.0], [7.5, 1.0]]:
+		h.stairs(Vector3(g[0], 0, g[1] * 13.5), Vector3(g[0], DECK_Y, g[1] * 5.3), 1.5, Color("#8E6136"))
 	# 선체 장식 띠 · 대포 구멍
 	for side in [-1, 1]:
 		h.box_span(Vector3(-17.2, DECK_Y + 1.25, side * 5.62), Vector3(15.0, DECK_Y + 1.25, side * 5.62), 0.12, 0.42, TRIM)
@@ -85,8 +86,8 @@ static func _boathouse(h) -> void:
 	h.floor_rect(Rect2(-26, 8, 56, 7), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
 	h.floor_rect(Rect2(-26, -8, 7, 16), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
 	h.floor_rect(Rect2(24, -8, 6, 16), 0.0, 0, Color("#9C7A55"), Color("#8A6A47"), 0.7)
-	# 부두 가장자리 밧줄 난간 (물에 안 빠지게) — 건널판 자리(북 x 7.5 · 남 x -6)만 비움
-	for seg in [[Vector3(-19, 0.9, 8), Vector3(6.4, 0.9, 8)], [Vector3(8.6, 0.9, 8), Vector3(24, 0.9, 8)], [Vector3(-19, 0.9, -8), Vector3(-7.1, 0.9, -8)], [Vector3(-4.9, 0.9, -8), Vector3(24, 0.9, -8)], [Vector3(-19, 0.9, -8), Vector3(-19, 0.9, 8)], [Vector3(24, 0.9, -8), Vector3(24, 0.9, 8)]]:
+	# 부두 가장자리 밧줄 난간 (물에 안 빠지게) — 건널판 자리만 비움
+	for seg in [[Vector3(-19, 0.9, 8), Vector3(-4.1, 0.9, 8)], [Vector3(-1.9, 0.9, 8), Vector3(6.4, 0.9, 8)], [Vector3(8.6, 0.9, 8), Vector3(24, 0.9, 8)], [Vector3(-19, 0.9, -8), Vector3(-7.1, 0.9, -8)], [Vector3(-4.9, 0.9, -8), Vector3(6.4, 0.9, -8)], [Vector3(8.6, 0.9, -8), Vector3(24, 0.9, -8)], [Vector3(-19, 0.9, -8), Vector3(-19, 0.9, 8)], [Vector3(24, 0.9, -8), Vector3(24, 0.9, 8)]]:
 		h.box_span(seg[0], seg[1], 0.06, 0.06, Color("#C9B48A"), true, 1.0)
 	for k in 12:
 		for z in [-8.0, 8.0]:
@@ -115,7 +116,7 @@ static func _boathouse(h) -> void:
 	Props.crate(h, Vector3(-22.0, 1.0, 12.0), 0.2, Vector3(1.0, 0.8, 0.9), 13, 13, "위 상자")
 	for p in [Vector3(-16.0, 0, 9.4), Vector3(-15.2, 0, 9.6), Vector3(18.0, 0, -9.5), Vector3(26.0, 0, 5.0), Vector3(26.5, 0, -5.0), Vector3(-23.5, 0, -3.0)]:
 		Props.barrel(h, p, 12, "부두 술통")
-	for p in [Vector3(-6.0, 0, 13.6), Vector3(2.0, 0, -13.6), Vector3(27.0, 0, 0.0), Vector3(-24.0, 0, 4.0), Vector3(10.0, 0, -12.6)]:
+	for p in [Vector3(-9.0, 0, 13.6), Vector3(2.0, 0, -13.6), Vector3(27.0, 0, 0.0), Vector3(-24.0, 0, 4.0), Vector3(10.0, 0, -12.6)]:
 		h.pushable(p, Vector3(1.0, 0.8, 1.0), Color("#B98A5E"), Game.rng.randf_range(-0.4, 0.4), 2.5)
 	for p in [Vector3(0.0, 0.03, 10.5), Vector3(-12.0, 0.03, -10.5)]:
 		h.box_rot(p, Vector3(3.0, 0.04, 2.0), Color("#7C8C6A"), Vector3(0, 20, 0))
