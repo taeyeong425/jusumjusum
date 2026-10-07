@@ -125,6 +125,7 @@ func _ready() -> void:
 
 
 var ready_done := false
+var secret_found := 0
 
 
 ## 지도 정보(경계 · 방 · 시작 자리)도 배율만큼
@@ -575,9 +576,10 @@ func ladder(base: Vector3, y1: float, yaw: float, c) -> void:
 
 
 ## 숨김 자리 (지도 좌표). 캐릭터 손이 안 닿는 높이(바닥에서 2.4 이상)는 버린다 — 올라설 데가 있으면 그 위에 등록
-func spot(pos: Vector3, kind := "open") -> void:
+## kind: "open"(보이는 곳) · "high"(높은 곳) · "secret"(화분 뒤 · 침대 밑처럼 찾아야 보이는 곳 — name = 어디인지)
+func spot(pos: Vector3, kind := "open", where := "") -> void:
 	var p := P(pos)
-	spots.append({"pos": p, "kind": kind, "lvl": lvl})
+	spots.append({"pos": p, "kind": kind, "lvl": lvl, "where": where})
 
 
 ## 열 수 있는 가구 (지도 좌표 · 지도 크기)
@@ -738,7 +740,7 @@ func _glint(n: Node3D, strength: float) -> void:
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.45)
 
 
-func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: Dictionary = {}) -> Dictionary:
+func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: Dictionary = {}, where := "") -> Dictionary:
 	var pc := _treasure_node(tier)
 	pc.position = pos + Vector3(0, 0.02, 0)
 	pc.scale = Vector3.ONE * W * 0.8
@@ -755,13 +757,13 @@ func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: 
 			(g as GeometryInstance3D).visibility_range_end = 30.0
 			(g as GeometryInstance3D).visibility_range_end_margin = 2.0
 	var e := {"kind": "treasure", "tier": tier, "node": pc, "parts": parts, "alive": true,
-		"hidden": not box_e.is_empty(), "lvl": level, "name": Themes.TIERS[tier][0], "from_box": not box_e.is_empty()}
+		"hidden": not box_e.is_empty(), "lvl": level, "name": Themes.TIERS[tier][0], "from_box": not box_e.is_empty(), "where": where}
 	pc.set_meta("entry", e)
 	if not box_e.is_empty():
 		pc.visible = false
 		pc.body.collision_layer = 0
 		(box_e["inside"] as Array).append(e)
-	elif tier != "gold" and Game.rng.randf() < 0.3:
+	elif tier != "gold" and where == "" and Game.rng.randf() < 0.3:
 		_glint(pc, 0.35)
 	treasures.append(e)
 	return e
@@ -792,16 +794,20 @@ func _place_treasures() -> void:
 	boxes.shuffle()
 	var opens := []
 	var highs := []
+	var secrets := []
 	for s in spots:
 		# 손이 안 닿는 높이(그 층 바닥에서 2.4 넘게)는 쓰지 않는다
 		if (s["pos"] as Vector3).y - level_y(int(s["lvl"])) > 2.4:
 			continue
 		if s["kind"] == "high":
 			highs.append(s)
+		elif s["kind"] == "secret":
+			secrets.append(s)
 		else:
 			opens.append(s)
 	opens.shuffle()
 	highs.shuffle()
+	secrets.shuffle()
 	# 바닥 아무 데나 (길찾기 칸에서)
 	var floor_pts := []
 	if nav:
@@ -839,6 +845,15 @@ func _place_treasures() -> void:
 				used.append(p)
 				_add_treasure(tier, p, _level_of(p.y), parts)
 				return
+	# 숨은 자리: 찾아야 보이는 곳 (반짝임 없음 · 주우면 "화분 뒤에서 발견!")
+	var put_secret := func(tier: String, parts: Array) -> bool:
+		while not secrets.is_empty():
+			var s: Dictionary = secrets.pop_back()
+			if far_enough.call(s["pos"]):
+				used.append(s["pos"])
+				_add_treasure(tier, s["pos"], s["lvl"], parts, {}, str(s["where"]))
+				return true
+		return false
 	var put_box := func(tier: String, parts: Array) -> bool:
 		if boxes.is_empty():
 			return false
@@ -855,6 +870,8 @@ func _place_treasures() -> void:
 			put_open.call("gold", parts)
 	for k in n_env:
 		var parts: Array = take.call(2)
+		if k % 5 == 0 and put_secret.call("env", parts):   # 편지봉투 5개 중 1개는 숨은 자리
+			continue
 		if not put_box.call("env", parts):
 			put_open.call("env", parts)
 	# 남은 높은 자리도 쪽지로
@@ -868,6 +885,11 @@ func _place_treasures() -> void:
 		var pe: Dictionary = pz[k]
 		var sp0: Vector3 = pe["start"]
 		_add_treasure("note", Vector3(sp0.x, level_y(int(pe["lvl"])), sp0.z), int(pe["lvl"]), take.call(1), pe)
+		n_note -= 1
+	# 쪽지 약 30%는 숨은 자리
+	for k in int(n_note * 0.3):
+		if not put_secret.call("note", take.call(1)):
+			break
 		n_note -= 1
 	for k in n_note:
 		put_open.call("note", take.call(1))
@@ -1090,7 +1112,7 @@ func _take(a: Dictionary, e: Dictionary) -> void:
 	st["found"] = int(st["found"]) + 1
 	if e["tier"] == "gold":
 		st["gold"] = int(st["gold"]) + 1
-	if e["from_box"]:
+	if e["from_box"] or str(e.get("where", "")) != "":   # 숨은 자리도 '가구 속' 카드에 센다
 		st["hidden"] = int(st["hidden"]) + 1
 	if int(e["lvl"]) > 0:
 		st["up"] = int(st["up"]) + 1
@@ -1098,7 +1120,10 @@ func _take(a: Dictionary, e: Dictionary) -> void:
 		Sfx.play("pick" if e["tier"] != "gold" else "star", -2.0)
 		slot = _envs(a).size() - 1
 		_refresh_hotbar()
-		if e["tier"] == "gold":   # 머리 위 "+쪽지" · 가방 칸으로 충분 — 금봉투만 따로 알린다
+		if str(e.get("where", "")) != "":
+			_toast("%s에서 %s 발견!" % [e["where"], e["name"]])
+			secret_found += 1
+		elif e["tier"] == "gold":   # 머리 위 "+쪽지" · 가방 칸으로 충분 — 금봉투만 따로 알린다
 			_toast("금봉투! 덩어리 3개")
 		_pop("+ " + e["name"], a["body"].global_position + Vector3(0, 2.5, 0))
 		_squash(a["vis"], 0.9)
@@ -2158,6 +2183,8 @@ func _scenario_reach() -> void:
 		if s.begins_with("--lvl="):   # 특정 층 목표만 (막힘 재현용)
 			var want := int(s.substr(6))
 			pool = pool.filter(func(e): return int(e["lvl"]) == want)
+		if s == "--secret":   # 숨은 자리 보물만
+			pool = pool.filter(func(e): return str(e.get("where", "")) != "")
 		if s.begins_with("--name="):
 			var nm := s.substr(7)
 			pool = pool.filter(func(e): return str(e["name"]) == nm)
@@ -2207,8 +2234,16 @@ func _scenario_reach() -> void:
 	for s in stuck:
 		print("[reach] 막힘: ", s)
 	var nt := 0
+	var ns := {}
 	for e in treasures:
 		nt += 1
+		if str(e.get("where", "")) != "":
+			ns[e["where"]] = int(ns.get(e["where"], 0)) + 1
+	var nsp := 0
+	for sp in spots:
+		if sp["kind"] == "secret":
+			nsp += 1
+	print("[secret] %s: 숨은 자리 %d곳 중 보물 %s" % [Game.theme, nsp, str(ns)])
 	print("[map] %s: 보물 %d · 가구 %d · 자리 %d · 길 점 %d · 사다리 %d · 계단 %d" % [Game.theme, nt, containers.size(), spots.size(), nav.get_point_count(), ladders.size(), links.size() - ladders.size()])
 
 

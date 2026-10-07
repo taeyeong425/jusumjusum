@@ -97,6 +97,9 @@ static func _hall(h) -> void:
 	for pp in [Vector3(-6.3, 0, 12.2), Vector3(6.3, 0, 12.2)]:
 		Props.plant(h, pp)
 	Props.big_desk(h, Vector3(-4.2, 0, 10.5), PI / 2, Color("#E8E2D8"), Color("#8C3A45"), 0, "안내 데스크")
+	h.spot(Vector3(-4.85, 0.02, 10.9), "secret", "안내 데스크 밑")
+	Props.trash_can(h, Vector3(5.6, 0, 12.3), 14)
+	Props.extinguisher_box(h, Vector3(-6.8, 0.75, 11.0), PI / 2)
 	# 계단 → 북쪽 발코니 (2층 3.4)
 	h.stairs(Vector3(6.15, 0, -1.2), Vector3(6.15, 3.4, -8.4), 1.2, Color("#D6CFC4"))
 	h.stairs(Vector3(-6.15, 0, -1.2), Vector3(-6.15, 3.4, -8.4), 1.2, Color("#D6CFC4"))
@@ -159,6 +162,8 @@ static func _gallery_b(h) -> void:
 		h.container("lid", p + Vector3(0, 0.93, 0), Vector3(1.4, 0.06, 0.8), PI, 7, p + Vector3(0, 0.96, 0), "진열장")
 	Props.bench(h, Vector3(-13.0, 0, 3.0), PI, Color("#3F3A36"), Color("#3F3A36"))
 	Props.plant(h, Vector3(-19.2, 0, 0.8))
+	Props.trash_can(h, Vector3(-19.3, 0, 12.3), 14)
+	Props.extinguisher_box(h, Vector3(-19.82, 0.75, 7.0), PI / 2)
 
 
 static func _gallery_c(h) -> void:
@@ -175,6 +180,7 @@ static func _gallery_c(h) -> void:
 		h.block(Vector3(13.5 + sx * 1.05, 0.95, -1.0), Vector3(0.4, 0.6, 0.6))
 	Props.bench(h, Vector3(13.5, 0, -8.5), PI, Color("#3F3A36"), Color("#3F3A36"))
 	h.spot(Vector3(19.2, 0.02, -12.2), "open")
+	Props.trash_can(h, Vector3(19.3, 0, 1.2), 14)
 
 
 ## 창고: 상자 · 선반 · 사다리 (선반 꼭대기에 금봉투)

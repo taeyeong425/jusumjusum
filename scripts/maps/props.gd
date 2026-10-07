@@ -38,6 +38,8 @@ static func desk(h, p: Vector3, yaw: float, top_c, leg_c, drawer_c: int, spot_on
 			for sz in [-0.17, 0.17]:
 				h.box(cp + r * sx + f * sz + Vector3(0, 0.22, 0), Vector3(0.04, 0.44, 0.04), leg_c, yaw, false, 0.0)
 		h.solid_box(cp + Vector3(0, 0.235, 0), Vector3(0.45, 0.47, 0.45), yaw)   # 앉는 면 높이까지만 — 밟고 책상에 오른다
+		if Game.rng.randf() < 0.3:
+			h.spot(cp + Vector3(0, 0.02, 0) - f * 0.05, "secret", "의자 밑")
 
 
 ## 큰 책상 (선생님 · 사서 · 선장) — 서랍 둘
@@ -223,6 +225,8 @@ static func pedestal(h, p: Vector3, yaw: float, c: int, hgt := 1.0) -> void:
 	h.box(p + Vector3(0, hgt + 0.03, 0), Vector3(0.85, 0.06, 0.85), c, yaw, false, 0.02)
 	h.container("drawer", p + Vector3(0, hgt * 0.35, 0) + f * 0.2, Vector3(0.5, 0.18, 0.4), yaw, c,
 		p + Vector3(0, hgt * 0.35 + 0.1, 0) + f * 0.68, "받침대 서랍")
+	if Game.rng.randf() < 0.5:
+		h.spot(p + Vector3(0, 0.02, 0) - f * 0.52, "secret", "받침대 뒤")
 
 
 ## 문 두 짝 수납장
@@ -248,7 +252,7 @@ static func bench(h, p: Vector3, yaw: float, c, leg_c) -> void:
 	for sx in [-0.65, 0.65]:
 		h.box(p + r * sx + Vector3(0, 0.22, 0), Vector3(0.07, 0.44, 0.4), leg_c, yaw, false, 0.0)
 	h.solid_box(p + Vector3(0, 0.25, 0), Vector3(1.6, 0.5, 0.45), yaw)
-	h.spot(p + Vector3(0, 0.02, 0) + r * 0.3, "open")
+	h.spot(p + Vector3(0, 0.02, 0) + r * 0.3, "secret", "벤치 밑")
 	h.end_obj()
 
 
@@ -271,6 +275,7 @@ static func plant(h, p: Vector3) -> void:
 	h.cyl(p + Vector3(0, 0.22, 0), 0.22, 0.44, 3, true, 12, 0.5, 0.26)
 	h.ball(p + Vector3(0, 0.75, 0), 0.38, 6, Vector3.ONE, true)
 	h.ball(p + Vector3(0.18, 0.95, 0.1), 0.24, 5)
+	h.spot(p + Vector3(-0.3, 0.02, -0.28), "secret", "화분 뒤")
 	h.spot(p + Vector3(0.35, 0.02, 0.3), "open")
 	h.end_obj()
 
@@ -320,3 +325,60 @@ static func poster(h, p: Vector3, yaw: float, size: Vector2, base, rng: RandomNu
 	for k in 3:
 		var off := Vector3(rng.randf_range(-0.3, 0.3) * size.x, rng.randf_range(-0.3, 0.3) * size.y, 0)
 		h.box(p + f * 0.02 + Basis(Vector3.UP, yaw) * off, Vector3(size.x * rng.randf_range(0.15, 0.4), size.y * rng.randf_range(0.08, 0.25), 0.01), [Color("#E2553D"), Color("#3E6B9A"), Color("#E9C46A"), Color("#5E9A5E")][rng.randi() % 4], yaw, false, 0.0)
+
+
+# ── 찾아야 보이는 숨은 자리용 소품 ───────────────────────
+
+## 쓰레기통 (뚜껑을 열면 속에)
+static func trash_can(h, p: Vector3, c := 14, name := "쓰레기통") -> void:
+	h.obj(p)
+	h.cyl(p + Vector3(0, 0.27, 0), 0.22, 0.54, c, true, 14, 0.4, 0.19)
+	h.cyl(p + Vector3(0, 0.53, 0), 0.235, 0.03, Data.color(c).darkened(0.2), false, 14)
+	h.container("lid", p + Vector3(0, 0.58, 0), Vector3(0.44, 0.06, 0.44), 0.0, c, p + Vector3(0, 0.35, 0), name)
+	h.end_obj()
+
+
+## 전자레인지 (탁자 위 — 문을 열면 속에). top = 놓을 면
+static func microwave(h, top: Vector3, yaw: float) -> void:
+	h.obj(top)
+	var f := _fwd(yaw)
+	var r := _rt(yaw)
+	h.box(top + Vector3(0, 0.17, 0) - f * 0.02, Vector3(0.56, 0.34, 0.38), Color("#E8E6E1"), yaw, true, 0.03)
+	h.box(top + Vector3(0, 0.17, 0) + f * 0.175 + r * 0.2, Vector3(0.1, 0.26, 0.02), Color("#3A3F44"), yaw, false, 0.01)
+	h.container("door", top + Vector3(0, 0.17, 0) + f * 0.185 - r * 0.06, Vector3(0.38, 0.26, 0.025), yaw, 15,
+		top + Vector3(0, 0.06, 0) + f * 0.12, "전자레인지")
+	h.end_obj()
+
+
+## 침대 (다리 사이 밑에 숨은 자리)
+static func bed(h, p: Vector3, yaw: float, frame_c, sheet_c, size := Vector2(1.0, 1.9)) -> void:
+	h.obj(p)
+	var f := _fwd(yaw)
+	var r := _rt(yaw)
+	h.box(p + Vector3(0, 0.36, 0), Vector3(size.x, 0.12, size.y), frame_c, yaw, false, 0.02)
+	h.box(p + Vector3(0, 0.5, 0), Vector3(size.x - 0.06, 0.16, size.y - 0.06), sheet_c, yaw, false, 0.06)
+	h.box(p + Vector3(0, 0.62, 0) - f * (size.y * 0.5 - 0.25), Vector3(size.x * 0.7, 0.1, 0.3), Color("#F4F1EA"), yaw, false, 0.05)
+	h.box(p + Vector3(0, 0.55, 0) - f * (size.y * 0.5 - 0.03), Vector3(size.x, 0.5, 0.06), frame_c, yaw, false, 0.02)
+	for sx in [-0.45, 0.45]:
+		for sz in [-0.45, 0.45]:
+			h.box(p + r * sx * size.x + f * sz * size.y + Vector3(0, 0.15, 0), Vector3(0.07, 0.3, 0.07), frame_c, yaw, false, 0.0)
+	h.solid_box(p + Vector3(0, 0.3, 0), Vector3(size.x, 0.6, size.y), yaw)
+	h.spot(p + Vector3(0, 0.02, 0) + r * 0.2 * size.x, "secret", "침대 밑")
+	h.end_obj()
+
+
+## 냄비 (뚜껑을 열면 속에). top = 놓을 면
+static func pot(h, top: Vector3, c := Color("#7E8A92")) -> void:
+	h.obj(top)
+	h.cyl(top + Vector3(0, 0.1, 0), 0.2, 0.2, c, true, 14, 0.6)
+	h.container("lid", top + Vector3(0, 0.22, 0), Vector3(0.42, 0.04, 0.42), 0.0, 14, top + Vector3(0, 0.08, 0), "냄비")
+	h.end_obj()
+
+
+## 벽에 붙은 소화기함 (문을 열면 소화기 옆에)
+static func extinguisher_box(h, p: Vector3, yaw: float) -> void:
+	h.obj(p)
+	var f := _fwd(yaw)
+	h.box(p + Vector3(0, 0.0, 0), Vector3(0.42, 0.6, 0.2), Color("#C0392B"), yaw, true, 0.02)
+	h.container("door", p + f * 0.11, Vector3(0.38, 0.56, 0.02), yaw, 2, p + Vector3(0, -0.2, 0) + f * 0.02, "소화기함")
+	h.end_obj()

@@ -123,7 +123,7 @@ static func _boathouse(h) -> void:
 		h.spot(p + Vector3(0.5, 0.05, 0.2), "open")
 	for p in [Vector3(6.0, 0.1, 13.8), Vector3(-2.0, 0.1, -13.8)]:
 		h.part("ring", 2, Color("#C9B48A"), p, Vector3.ZERO, 2.2)
-		h.spot(p, "open")
+		h.spot(p, "secret", "밧줄 더미 속")
 	Props.table(h, Vector3(20.0, 0, 13.6), 0.0, Vector2(2.4, 1.0), Color("#8A6A47"), Color("#5E4128"), 2)
 	for bp in [Vector3(-14.0, 0, 11.0), Vector3(16.0, 0, -11.0)]:
 		h.toy_ball(bp, 0.16, Color("#2B2B2B"), 0.15)   # 대포알 — 무겁게 굴러간다
@@ -134,6 +134,7 @@ static func _boathouse(h) -> void:
 	Props.big_desk(h, Vector3(-23.0, 0, -12.8), 0.0, Color("#8A6A47"), Color("#5E4128"), 13, "사무실 서랍")
 	Props.cabinet(h, Vector3(-25.5, 0, -11.0), PI / 2, 14, 14, "서류장")
 	Props.lamp(h, Vector3(-23.0, 2.6, -12.5), Color("#FFE7B8"), 1.0, 4.0)
+	Props.trash_can(h, Vector3(-25.3, 0, -14.3), 12)
 
 
 
@@ -163,6 +164,7 @@ static func _hold(h) -> void:
 	for k in 4:
 		h.part("potato", 0, Color("#C9B48A"), Vector3(1.5 + k * 0.7, 0.35, 4.5), Vector3(0, k * 40, 0), 1.5, true)
 	h.spot(Vector3(2.6, 0.02, 3.6), "open")
+	h.spot(Vector3(2.9, 0.02, 5.05), "secret", "자루 사이")
 	h.end_obj()
 	h.obj(Vector3(-0.7, 0, 4.6))
 	for k in 6:
@@ -201,6 +203,8 @@ static func _deck(h) -> void:
 				h.cyl_rot(cp + Vector3(-0.45, 0.15, wz), 0.15, 0.08, HULL_DARK, Vector3(0, 0, 90))
 			if k % 2 == 0:
 				h.spot(cp + Vector3(0.9, 0.02, -side * 0.3), "open")
+			else:
+				h.spot(cp + Vector3(0, 0.6, side * 0.85), "secret", "대포 포구 속")
 			h.end_obj()
 	# 술통 · 상자 · 밧줄 고리
 	for p in [Vector3(12.5, DECK_Y, -4.3), Vector3(13.3, DECK_Y, -3.6), Vector3(-8.5, DECK_Y, 3.2), Vector3(7.0, DECK_Y, 4.0)]:
@@ -212,7 +216,7 @@ static func _deck(h) -> void:
 	for p in [Vector3(9.0, DECK_Y + 0.1, -1.6), Vector3(-6.0, DECK_Y + 0.1, -1.0)]:
 		h.part("ring", 2, Color("#C9B48A"), p, Vector3.ZERO, 2.2)
 		h.part("ring", 2, Color("#C9B48A"), p + Vector3(0, 0.12, 0), Vector3.ZERO, 1.8)
-		h.spot(p + Vector3(0, 0.0, 0), "open")
+		h.spot(p + Vector3(0, 0.0, 0), "secret", "밧줄 더미 속")
 	# 갑판 → 뒷갑판 계단 (오른쪽 가장자리)
 	h.stairs(Vector3(-5.6, DECK_Y, 4.55), Vector3(-9.8, QD_Y, 4.55), 1.0, PLANK2)   # 꼭대기 = 선장실 벽 바깥면 (벽 윗모서리가 턱이 되지 않게)
 	h.lv(0)
@@ -230,9 +234,8 @@ static func _cabin(h) -> void:
 	Props.table(h, Vector3(-12.8, DECK_Y, 2.8), 0.0, Vector2(1.4, 1.0), Color("#5E3A1E"), Color("#4A2E1A"), 1)
 	h.box(Vector3(-12.8, DECK_Y + 0.81, 2.8), Vector3(1.1, 0.01, 0.75), Color("#E8D2A0"), 0.1, false, 0.0)
 	Props.bookshelf(h, Vector3(-16.75, DECK_Y, -3.6), PI / 2, 1.8, Color("#4A2E1A"), 3, true)
-	h.box(Vector3(-16.0, DECK_Y + 0.3, 4.4), Vector3(1.6, 0.6, 1.4), Color("#5E3A1E"), 0.0, true, 0.05)
-	h.box(Vector3(-16.0, DECK_Y + 0.65, 4.4), Vector3(1.5, 0.12, 1.3), Color("#C94A4A"), 0.0, false, 0.06)
-	h.spot(Vector3(-15.6, DECK_Y + 0.73, 4.0), "open")
+	Props.bed(h, Vector3(-16.0, DECK_Y, 4.4), PI / 2, Color("#5E3A1E"), Color("#C94A4A"), Vector2(1.3, 1.6))
+	h.spot(Vector3(-15.6, DECK_Y + 0.6, 4.0), "open")
 	Props.cabinet(h, Vector3(-13.0, DECK_Y, -5.0), 0.0, 12, 13, "옷장")
 	Props.lamp(h, Vector3(-13.5, QD_Y - 0.4, 0.0), Color("#FFC27A"), 1.6, 7.0)
 	h.box(Vector3(-16.85, DECK_Y + 1.6, 1.5), Vector3(0.02, 0.9, 1.3), Color("#E8D2A0"), PI / 2, false, 0.0)
@@ -318,6 +321,8 @@ static func _gundeck(h) -> void:
 			else:
 				h.ball(cp + Vector3(1.2, 0.16, -side * 0.5), 0.16, Color("#2B2B2B"), Vector3.ONE, true)
 				h.spot(cp + Vector3(1.5, 0.02, -side * 0.9), "open")
+			if k == 0 or k == 3:
+				h.spot(cp + Vector3(0, 0.6, side * 0.95), "secret", "대포 포구 속")
 	# 해먹 (천장 들보에 매달림) · 식탁 · 의자
 	for k in 4:
 		var hp := Vector3(-13.0 + k * 2.6, GUN_Y, 0.0)
@@ -334,6 +339,7 @@ static func _gundeck(h) -> void:
 	h.box(Vector3(12.8, GUN_Y + 0.6, -2.4), Vector3(1.4, 1.2, 1.2), Color("#5A5A5A"), 0.0, true, 0.04)
 	h.cyl(Vector3(12.8, GUN_Y + 2.0, -2.4), 0.15, 1.6, Color("#3A3A3A"), false, 10)
 	h.container("door", Vector3(12.8, GUN_Y + 0.55, -1.78), Vector3(0.7, 0.6, 0.05), 0.0, 15, Vector3(12.8, GUN_Y + 0.35, -2.2), "화덕")
+	Props.pot(h, Vector3(12.35, GUN_Y + 1.2, -2.55))
 	Props.bookshelf(h, Vector3(13.65, GUN_Y, 2.2), -PI / 2, 2.0, Color("#5E4128"), 3, false)
 	for lp in [Vector3(-10, GUN_Y + 2.0, 0), Vector3(-2, GUN_Y + 2.0, 2.5), Vector3(8, GUN_Y + 2.0, 0)]:
 		Props.lamp(h, lp, Color("#FFC27A"), 1.3, 7.0)
