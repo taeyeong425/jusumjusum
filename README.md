@@ -213,6 +213,7 @@ tests/            판정 보정 · 밸런스 시뮬레이션 · 글리프 확인
 
 ## 라이선스
 
+- 3D 소품: Kenney Furniture Kit · Pirate Kit — CC0 (`assets/models/kenney/License-*.txt`)
 - 폰트: Pretendard — SIL Open Font License (`assets/fonts/OFL-*.txt`)
 - 효과음: Kenney Impact Sounds · Interface Sounds — CC0 (`assets/sfx/License-*.txt`)
 - 엔진: Godot Engine (MIT)

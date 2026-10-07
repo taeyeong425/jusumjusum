@@ -38,7 +38,7 @@ static func desk(h, p: Vector3, yaw: float, top_c, leg_c, drawer_c: int, spot_on
 			for sz in [-0.17, 0.17]:
 				h.box(cp + r * sx + f * sz + Vector3(0, 0.22, 0), Vector3(0.04, 0.44, 0.04), leg_c, yaw, false, 0.0)
 		h.solid_box(cp + Vector3(0, 0.235, 0), Vector3(0.45, 0.47, 0.45), yaw)   # 앉는 면 높이까지만 — 밟고 책상에 오른다
-		if Game.rng.randf() < 0.3:
+		if Game.rng.randf() < 0.15:
 			h.spot(cp + Vector3(0, 0.02, 0) - f * 0.05, "secret", "의자 밑")
 
 
@@ -124,6 +124,9 @@ static func bookshelf(h, p: Vector3, yaw: float, w: float, c, levels := 4, top_h
 			bi += 1
 		var sp: Vector3 = p + r * (w * 0.5 - 0.22) + Vector3(0, y + 0.04, 0)
 		h.spot(sp, "high" if top_high and lv == levels - 1 else "open")
+		# 책장 속: 책 뒤에 끼워 둔 쪽지 (앞에선 잘 안 보인다)
+		if lv < 3 and Game.rng.randf() < 0.35:
+			h.spot(p + r * Game.rng.randf_range(-w * 0.3, w * 0.05) + Vector3(0, y + 0.04, 0) - f * (d * 0.32), "secret", "책 사이")
 
 
 ## 열린 선반 (칸 = 보물 자리)
@@ -382,3 +385,29 @@ static func extinguisher_box(h, p: Vector3, yaw: float) -> void:
 	h.box(p + Vector3(0, 0.0, 0), Vector3(0.42, 0.6, 0.2), Color("#C0392B"), yaw, true, 0.02)
 	h.container("door", p + f * 0.11, Vector3(0.38, 0.56, 0.02), yaw, 2, p + Vector3(0, -0.2, 0) + f * 0.02, "소화기함")
 	h.end_obj()
+
+
+# ── 부수기 · 흔들기 ─────────────────────────────
+
+## 부술 수 있는 항아리 (F 세 번)
+static func jar(h, p: Vector3, c, name := "항아리", hgt := 0.7) -> void:
+	h.obj(p)
+	h.container("break", p + Vector3(0, hgt * 0.5, 0), Vector3(0.5, hgt, 0.5), Game.rng.randf() * TAU, c if c is int else 12,
+		p + Vector3(0, 0.05, 0), name, "cylinder", Vector3.INF, Vector3(1.1, 0.85, 1.1))
+	h.end_obj()
+
+
+## 부술 수 있는 나무 상자 (판자에 금 — F 세 번)
+static func break_crate(h, p: Vector3, yaw: float, size := Vector3(0.8, 0.7, 0.7), name := "낡은 나무 상자") -> void:
+	h.obj(p)
+	h.container("break", p + Vector3(0, size.y * 0.5, 0), size, yaw, 12, p + Vector3(0, 0.05, 0), name)
+	var f := _fwd(yaw)
+	var r := _rt(yaw)
+	for k in 2:   # 금 간 판자 표시
+		h.box_rot(p + Vector3(0, size.y * (0.35 + k * 0.3), 0) + f * (size.z * 0.5 + 0.005) + r * (k * 0.1 - 0.05), Vector3(size.x * 0.6, 0.025, 0.01), Color("#3B2B22"), Vector3(0, rad_to_deg(yaw), 12 - k * 24))
+	h.end_obj()
+
+
+## 흔들면 꼭대기(top)에 숨어 있던 게 앞으로(drop) 툭 떨어진다. grip = 손이 닿는 흔들 자리 (가구 앞면 판)
+static func shake_spot(h, grip: Vector3, top: Vector3, drop: Vector3, yaw: float, c, name: String, grip_size := Vector3(0.9, 0.06, 0.06)) -> void:
+	h.container("shake", grip, grip_size, yaw, c if c is int else 12, top, name, "box", drop)

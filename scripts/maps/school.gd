@@ -121,6 +121,8 @@ static func _gym(h) -> void:
 		h.pushable(p, Vector3(2.0, 0.22, 1.2), Color("#2F6FB5"), Game.rng.randf_range(-0.3, 0.3), 4.0)
 	# 뜀틀 · 공 바구니 · 상자들 (밀 수 있음)
 	Props.crate(h, Vector3(12.0, 0, 18.5), 0.0, Vector3(1.4, 1.0, 0.7), 3, 0, "뜀틀")
+	Props.break_crate(h, Vector3(18.6, 0, 22.8), 0.2)
+	Props.break_crate(h, Vector3(17.5, 0, 23.1), -0.3, Vector3(0.7, 0.6, 0.6))
 	h.cyl(Vector3(15.5, 0.4, 14.0), 0.5, 0.8, 14, true, 12, 0.6, 0.55)
 	for k in 5:
 		h.ball(Vector3(15.3 + (k % 3) * 0.25, 0.85 + (k / 3) * 0.2, 13.9 + (k % 2) * 0.2), 0.12, [3, 2, 0, 8, 6][k], Vector3.ONE, true)
@@ -155,6 +157,8 @@ static func _classroom(h, x0: float, rng: RandomNumberGenerator) -> void:
 	h.part("ring", 2, 14, Vector3(cx + 0.6, 1.15, -10.0), Vector3(90, 0, -20), 0.6)
 	h.part("cylinder", 0, 12, Vector3(cx + 0.6, 0.92, -10.0), Vector3.ZERO, 0.4, true)
 	h.spot(Vector3(cx - 0.3, 0.02, -10.62), "secret", "교탁 밑")
+	h.kmodel("furniture/plantSmall%d" % (1 + int(absf(x0)) % 3), Vector3(cx - 0.7, 0.815, -10.05), 0.0, 0.3, false)
+	h.kmodel("furniture/books", Vector3(cx - 0.2, 0.815, -9.95), 0.4, 0.14, false)
 	h.end_obj()
 	# 학생 책상 3×3
 	for row in 3:
@@ -197,11 +201,19 @@ static func _teachers(h) -> void:
 	h.cyl(Vector3(9.2, 0.6, -11.2), 0.25, 1.2, 0, true, 12)
 	h.cyl(Vector3(9.2, 1.45, -11.2), 0.18, 0.5, Color("#9FD3EA"), false, 12)
 	Props.bookshelf(h, Vector3(15.5, 0, -11.65), 0.0, 2.4, Color("#8B6A4C"), 3)
+	Props.shake_spot(h, Vector3(15.5, 0.85, -11.44), Vector3(15.5, 1.65, -11.65), Vector3(15.8, 0, -10.9), 0.0, 12, "교무실 책장")
 	# 탕비 조리대 + 전자레인지 · 쓰레기통
 	h.box(Vector3(12.4, 0.45, -11.45), Vector3(1.5, 0.9, 0.6), Color("#D9D4CB"), 0.0, true, 0.02)
 	h.box(Vector3(12.4, 0.92, -11.45), Vector3(1.56, 0.04, 0.64), Color("#8E8A84"), 0.0, false, 0.01)
 	Props.microwave(h, Vector3(12.0, 0.94, -11.45), 0.0)
-	h.cyl(Vector3(12.85, 1.0, -11.4), 0.06, 0.12, Color("#F4F1EA"), false, 10)
+	h.kmodel("furniture/kitchenCoffeeMachine", Vector3(12.85, 0.94, -11.45), 0.0, 0.34, false)
+	h.kmodel("furniture/kitchenFridgeSmall", Vector3(13.65, 0, -11.45), 0.0, 1.35)
+	h.kmodel("furniture/coatRackStanding", Vector3(19.3, 0, -3.0), 0.0, 1.75)
+	h.kmodel("furniture/rugRectangle", Vector3(11.0, 0.004, -4.6), 0.0, 0.01, false, 3.2)
+	for dx in [11.0, 16.5]:
+		h.kmodel("furniture/computerScreen", Vector3(dx + 0.4, 0.815, -9.25), 0.0, 0.42, false)
+		h.kmodel("furniture/computerKeyboard", Vector3(dx + 0.35, 0.815, -8.85), 0.0, 0.04, false)
+		h.kmodel("furniture/books", Vector3(dx - 0.6, 0.815, -9.2), 0.3, 0.14, false)
 	Props.trash_can(h, Vector3(19.3, 0, -11.3))
 
 
@@ -275,12 +287,21 @@ static func _music(h) -> void:
 static func _library(h, rng: RandomNumberGenerator) -> void:
 	for k in 3:
 		Props.bookshelf(h, Vector3(-6.4 + k * 2.6, 0, 11.65), PI, 2.4, Color("#8B6A4C"), 4, true)
+	# 책장 흔들기: 꼭대기에 숨은 봉투가 떨어진다
+	Props.shake_spot(h, Vector3(-3.8, 0.85, 11.44), Vector3(-3.8, 2.15, 11.65), Vector3(-3.5, 0, 10.9), PI, 12, "책장")
 	Props.bookshelf(h, Vector3(7.65, 0, 6.0), -PI / 2, 2.6, Color("#8B6A4C"), 4, true)
 	Props.bookshelf(h, Vector3(-7.65, 0, 4.2), PI / 2, 2.2, Color("#8B6A4C"), 3, false)
 	Props.table(h, Vector3(3.0, 0, 5.0), 0.0, Vector2(2.2, 1.0), Color("#C9A27A"), Color("#6E5743"), 2)
 	Props.table(h, Vector3(3.0, 0, 8.2), 0.0, Vector2(2.2, 1.0), Color("#C9A27A"), Color("#6E5743"), 2)
 	Props.big_desk(h, Vector3(-4.5, 0, 3.2), 0.0, Color("#B88E64"), Color("#9C7552"), 13, "사서 서랍")
 	Props.plant(h, Vector3(6.9, 0, 2.7))
+	h.kmodel("furniture/rugRectangle", Vector3(3.0, 0.004, 6.6), PI / 2, 0.01, false, 5.6)
+	for tp in [Vector3(3.8, 0.79, 5.0), Vector3(2.2, 0.79, 8.2)]:
+		h.kmodel("furniture/lampSquareTable", tp, 0.0, 0.42, false)
+	h.kmodel("furniture/books", Vector3(2.3, 0.79, 5.1), 0.5, 0.14, false)
+	h.kmodel("furniture/books", Vector3(3.9, 0.79, 8.1), -0.4, 0.14, false)
+	h.kmodel("furniture/loungeChair", Vector3(6.4, 0, 9.6), -PI / 2, 0.9)
+	h.spot(Vector3(6.75, 0.02, 10.25), "secret", "안락의자 밑")
 	# 다락 (2층, 높이 2.6) — x -8 ~ -1, z 7 ~ 12
 	h.lv(2)
 	h.floor_rect(Rect2(-8, 7, 7, 5), 2.6, 0, Color("#B9895C"), Color("#A97B50"), 0.55, 0.22)
@@ -330,6 +351,10 @@ static func _art(h) -> void:
 	Props.cabinet(h, Vector3(19.4, 0, 8.5), -PI / 2, 0, 7, "물감장")
 	Props.cubbies(h, Vector3(9.0, 0, 2.45), 0.0, 4, 2, Color("#D9B98F"))
 	Props.crate(h, Vector3(9.2, 0, 11.2), 0.0, Vector3(1.0, 0.9, 0.7), 13, 13, "가마")
+	h.kmodel("furniture/bear", Vector3(19.3, 0, 9.9), -PI / 2, 0.75)
+	h.spot(Vector3(19.55, 0.02, 10.35), "secret", "곰 인형 뒤")
+	for jp in [Vector3(18.8, 0, 11.2), Vector3(17.9, 0, 11.45)]:
+		Props.jar(h, jp, 12, "점토 항아리", 0.6)
 
 
 
@@ -380,13 +405,19 @@ static func _second_floor(h) -> void:
 		for j in 2:
 			var p := Vector3(-1.0 + k * 3.4, F2, -9.5 + j * 3.4)
 			Props.desk(h, p, 0.0, Color("#E6E8EA"), Color("#5E6B78"), 8, (k + j) % 2 == 0)
-			h.box(p + Vector3(0, 1.0, -0.12), Vector3(0.55, 0.38, 0.04), Color("#1E2A33"), 0.0, false, 0.02)
-			h.box(p + Vector3(0, 0.79, 0.12), Vector3(0.4, 0.02, 0.14), Color("#3A4650"), 0.0, false, 0.0)
+			h.kmodel("furniture/computerScreen", p + Vector3(0, 0.77, -0.12), 0.0, 0.42, false)
+			h.kmodel("furniture/computerKeyboard", p + Vector3(-0.05, 0.77, 0.12), 0.0, 0.04, false)
+			h.kmodel("furniture/computerMouse", p + Vector3(0.3, 0.77, 0.14), 0.0, 0.03, false)
 	Props.locker(h, Vector3(9.3, F2, -11.5), 0.0, 15, 9)
 	Props.locker(h, Vector3(8.6, F2, -11.5), 0.0, 15, 9)
 	Props.crate(h, Vector3(-3.0, F2, -3.0), 0.0, Vector3(0.8, 0.5, 0.6), 0, 14, "프린터")
 	# 방송실 (x 10 ~ 20): 방송 책상 · 스피커 · 상자 더미 (밟고 오르면 선반)
 	Props.big_desk(h, Vector3(15.0, F2, -9.5), 0.0, Color("#3F3A36"), Color("#2B2B2B"), 15, "방송실 서랍")
+	h.kmodel("furniture/radio", Vector3(14.4, F2 + 0.815, -9.7), 0.0, 0.32, false)
+	h.kmodel("furniture/televisionVintage", Vector3(15.6, F2 + 0.815, -9.75), 0.0, 0.5, false)
+	h.kmodel("furniture/speaker", Vector3(13.2, F2, -11.3), 0.0, 1.25)
+	h.kmodel("furniture/speaker", Vector3(16.9, F2, -11.3), 0.0, 1.25)
+	h.spot(Vector3(13.2, F2 + 0.02, -10.75), "secret", "스피커 뒤")
 	for sp in [Vector3(11.0, F2, -11.5), Vector3(19.0, F2, -11.5)]:
 		h.box(sp + Vector3(0, 0.6, 0), Vector3(0.6, 1.2, 0.5), Color("#2B2B2B"), 0.0, true, 0.06)
 		h.cyl_rot(sp + Vector3(0, 0.75, 0.26), 0.2, 0.02, Color("#555555"), Vector3(90, 0, 0))

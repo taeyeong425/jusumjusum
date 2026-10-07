@@ -73,7 +73,7 @@ func _ready() -> void:
 	var steps := UI.hbox(14)
 	steps.alignment = BoxContainer.ALIGNMENT_CENTER
 	for st in [
-		["1", "보물찾기", "학교 · 미술관 · 해적선을 돌며\n서랍과 상자 속 봉투를 모아요"],
+		["1", "보물찾기", "열고 · 부수고 · 흔들어서\n숨은 봉투를 모아요"],
 		["2", "조립", "봉투를 열어 나온 덩어리로\n제시된 물건을 만들어요"],
 		["3", "전시 · 평가", "서로의 작품에 별점을 주고\n할당량을 넘기면 통과예요"],
 	]:
@@ -93,7 +93,7 @@ func _ready() -> void:
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(foot)
 
-	var credit := UI.label("v0.6.4 · Godot · Pretendard (OFL) · Kenney 효과음 (CC0)", 18, Color(UI.SOFT, 0.55))
+	var credit := UI.label("v0.6.5 · Godot · Pretendard (OFL) · Kenney 효과음 · 가구 · 해적 키트 (CC0)", 18, Color(UI.SOFT, 0.55))
 	layer.add_child(credit)
 	UI.corner(credit, Control.PRESET_BOTTOM_RIGHT, Vector2(16, 10))
 

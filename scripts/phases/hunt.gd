@@ -219,7 +219,7 @@ func _col(c) -> Color:
 var audit_on := OS.get_cmdline_user_args().has("--scenario=solids")
 var audit: Array = []   # [로컬 크기, 변환, 지도 코드 위치, 층]
 
-func _batch_add(mesh: Mesh, xf: Transform3D, c, gloss := 0.55) -> void:
+func _batch_add(mesh: Mesh, xf: Transform3D, c, gloss := 0.55, si := 0) -> void:
 	if audit_on:
 		var where := "?"
 		for fr in get_stack():
@@ -235,7 +235,7 @@ func _batch_add(mesh: Mesh, xf: Transform3D, c, gloss := 0.55) -> void:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		b[key] = [st, col, gloss]
-	(b[key][0] as SurfaceTool).append_from(mesh, 0, xf)
+	(b[key][0] as SurfaceTool).append_from(mesh, si, xf)
 
 
 func _commit(b: Dictionary, parent: Node3D) -> void:
@@ -285,6 +285,74 @@ func _plain_box(size: Vector3) -> Mesh:
 
 
 ## 상자 하나 (중심 · 크기, 지도 단위). round = 모서리 반지름
+# ── 무료 에셋 (Kenney Furniture Kit · Pirate Kit, CC0) ─────────────
+# 가구 키트는 부분마다 단색 → 그 색 그대로 지도 묶음에 합친다 (같은 셰이더 · 외곽선 · 투시, 그리기 호출 거의 안 늘어남)
+# 해적 키트는 색 텍스처 → 따로 놓고 외곽선만 씌운다
+var _kcache := {}
+
+func _kinfo(path: String) -> Dictionary:
+	if _kcache.has(path):
+		return _kcache[path]
+	var sc: PackedScene = load(path)
+	var root := sc.instantiate()
+	var parts := []   # [mesh, 노드 변환]
+	var ab := AABB()
+	var first := true
+	var stack: Array = [[root, Transform3D()]]
+	while not stack.is_empty():
+		var it: Array = stack.pop_back()
+		var node: Node = it[0]
+		var xf: Transform3D = it[1]
+		if node is Node3D and node != root:
+			xf = xf * (node as Node3D).transform
+		if node is MeshInstance3D:
+			var mi := node as MeshInstance3D
+			parts.append([mi.mesh, xf])
+			var a := xf * mi.mesh.get_aabb()
+			ab = a if first else ab.merge(a)
+			first = false
+		for c in node.get_children():
+			stack.append([c, xf])
+	root.free()
+	var info_k := {"scene": sc, "parts": parts, "aabb": ab}
+	_kcache[path] = info_k
+	return info_k
+
+
+## 에셋 하나 놓기. pos = 바닥 가운데(지도 좌표), hgt = 높이(지도 단위)에 맞춰 키운다. 돌려주는 값 = 윗면 높이(지도 좌표 y)
+func kmodel(file: String, pos: Vector3, yaw: float, hgt: float, solid := true, fit_w := 0.0) -> float:
+	var pirate := file.begins_with("pirate/")
+	var path := "res://assets/models/kenney/%s.glb" % file
+	var ki := _kinfo(path)
+	var ab: AABB = ki["aabb"]
+	var k: float = (fit_w / maxf(ab.size.x, 0.001)) if fit_w > 0.0 else hgt / maxf(ab.size.y, 0.001)   # 깔개처럼 납작한 건 폭으로
+	var base := Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3.ONE * k * W), P(pos)) * Transform3D(Basis(), -Vector3(ab.get_center().x, ab.position.y, ab.get_center().z))
+	if pirate:
+		var inst: Node3D = (ki["scene"] as PackedScene).instantiate()
+		inst.transform = base
+		lvl_roots[lvl].add_child(inst)
+		var st: Array = [inst]
+		while not st.is_empty():
+			var n: Node = st.pop_back()
+			st.append_array(n.get_children())
+			if n is MeshInstance3D:
+				(n as MeshInstance3D).material_overlay = Data.outline_material()
+				(n as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	else:
+		for pr in ki["parts"]:
+			var m: Mesh = pr[0]
+			for si in m.get_surface_count():
+				var mat := m.surface_get_material(si)
+				var col := Color("#DDDDDD")
+				if mat is BaseMaterial3D:
+					col = (mat as BaseMaterial3D).albedo_color
+				_batch_add(m, base * (pr[1] as Transform3D), col, 0.45, si)
+	if solid:
+		var sz := ab.size * k * W
+		_solid(P(pos) + Vector3(0, sz.y * 0.5, 0), sz * 0.92, yaw)
+	return pos.y + ab.size.y * k
+
+
 ## 보이지 않는 충돌만 (지도 좌표)
 func block(center: Vector3, size: Vector3, yaw := 0.0) -> void:
 	_solid(P(center), size * W, yaw)
@@ -583,7 +651,8 @@ func spot(pos: Vector3, kind := "open", where := "") -> void:
 
 
 ## 열 수 있는 가구 (지도 좌표 · 지도 크기)
-func container(kind: String, pos: Vector3, size: Vector3, yaw: float, c: int, inside: Vector3, name: String) -> Dictionary:
+## kind: drawer · door · lid · frame (열기) / break (세 번 쳐서 부수기) / shake (흔들면 위에서 떨어진다 — drop = 떨어질 자리)
+func container(kind: String, pos: Vector3, size: Vector3, yaw: float, c: int, inside: Vector3, name: String, ptype := "box", drop := Vector3.INF, pshape := Vector3.ONE) -> Dictionary:
 	pos = P(pos)
 	inside = P(inside)
 	size *= W
@@ -597,12 +666,15 @@ func container(kind: String, pos: Vector3, size: Vector3, yaw: float, c: int, in
 	pivot.position = pos + hinge
 	pivot.rotation.y = yaw
 	lvl_roots[lvl].add_child(pivot)
-	var pc := Piece.new().setup("box", int(c), true, Vector3.ONE)
-	pc.set_pscale(size / 0.5, false)
+	var pc := Piece.new().setup(ptype, int(c), true, pshape)
+	pc.set_pscale(size / Data.base_size(Data.mesh_key(ptype, pshape)), false)
 	pc.position = basis.inverse() * (-hinge)
 	pivot.add_child(pc)
 	var e := {"kind": "box", "node": pc, "pivot": pivot, "mode": kind, "hold": 0.0, "name": name,
-		"alive": true, "inside": [], "slot": inside, "lvl": lvl, "yaw": yaw}
+		"alive": true, "inside": [], "slot": inside, "lvl": lvl, "yaw": yaw, "hp": 3 if kind == "break" else 1,
+		"drop": P(drop) if drop != Vector3.INF else Vector3.INF}
+	if kind == "break":   # 부술 것은 몸체도 있다 (깨지면 같이 사라진다)
+		e["solid"] = _solid(pos, size * 0.92, yaw)
 	pc.set_meta("entry", e)
 	containers.append(e)
 	return e
@@ -679,10 +751,71 @@ func _open_anim(e: Dictionary) -> void:
 			tw.tween_property(pv, "rotation:x", -1.6, 0.4)
 		"frame":
 			tw.tween_property(pv, "rotation:x", -0.9, 0.4)
+		"shake":
+			var r0 := pv.rotation.z
+			var stw := create_tween()
+			for k in 5:
+				stw.tween_property(pv, "rotation:z", r0 + (0.12 if k % 2 == 0 else -0.12) * (1.0 - k * 0.18), 0.07)
+			stw.tween_property(pv, "rotation:z", r0, 0.08)
+			tw.tween_interval(0.01)
+			Sfx.play("thud", -6.0)
+		"break":
+			tw.tween_interval(0.01)
+			_shatter(e)
 	var n: Piece = e["node"]
 	if n.body:
 		n.body.collision_layer = 0
 	n.set_highlight(false)
+
+
+## 칠 때: 흔들리고 살짝 찌그러진다
+func _hit_anim(e: Dictionary) -> void:
+	var n: Piece = e["node"]
+	var s1 := n.vis.scale
+	var tw := create_tween()
+	tw.tween_property(n.vis, "scale", Vector3(s1.x * 1.12, s1.y * 0.86, s1.z * 1.12), 0.05)
+	tw.tween_property(n.vis, "scale", s1, 0.18).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	var pv: Node3D = e["pivot"]
+	var r0 := pv.rotation.y
+	var rt := create_tween()
+	rt.tween_property(pv, "rotation:y", r0 + 0.08, 0.04)
+	rt.tween_property(pv, "rotation:y", r0, 0.15).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+
+## 부서질 때: 몸통은 사라지고 조각들이 튀어 흩어진다
+func _shatter(e: Dictionary) -> void:
+	var n: Piece = e["node"]
+	var c0: Vector3 = n.global_position
+	var col: Color = Data.color(n.color_idx)
+	var sz := n.pscale * 0.5
+	n.visible = false
+	if e.has("solid") and is_instance_valid(e["solid"]):
+		(e["solid"] as Node).queue_free()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col.darkened(0.08)
+	mat.roughness = 0.7
+	for k in 9:
+		var sh := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(randf_range(0.25, 0.45), randf_range(0.12, 0.3), randf_range(0.2, 0.4)) * maxf(sz.x, sz.z) * 0.9
+		sh.mesh = bm
+		sh.material_override = mat
+		add_child(sh)
+		sh.global_position = c0 + Vector3(randf_range(-0.3, 0.3) * sz.x, randf_range(-0.2, 0.3) * sz.y, randf_range(-0.3, 0.3) * sz.z)
+		var dir := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * randf_range(0.6, 1.4)
+		var floor_y: float = level_y(int(e["lvl"])) + 0.06
+		var p0 := sh.global_position
+		var p1 := Vector3(p0.x + dir.x, floor_y, p0.z + dir.z)
+		var up := randf_range(0.4, 0.9)
+		var spin := Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
+		var tw := create_tween()
+		tw.tween_method(func(t: float):
+			if is_instance_valid(sh):
+				sh.global_position = p0.lerp(p1, t) + Vector3(0, up * 4.0 * t * (1.0 - t), 0)
+				sh.rotation = spin * t, 0.0, 1.0, 0.5)
+		tw.tween_interval(1.6)
+		tw.tween_property(sh, "scale", Vector3.ONE * 0.01, 0.4)
+		tw.tween_callback(sh.queue_free)
 
 
 # ── 보물 ─────────────────────────────────────────────
@@ -792,6 +925,8 @@ func _place_treasures() -> void:
 		return out
 	var boxes := containers.duplicate()
 	boxes.shuffle()
+	# 부수기 · 흔들기 가구는 먼저 채운다 (부쉈는데 비면 허무하다) — pop_back이라 뒤로 보낸다
+	boxes.sort_custom(func(x, y): return (x["mode"] in ["break", "shake"]) == false and (y["mode"] in ["break", "shake"]))
 	var opens := []
 	var highs := []
 	var secrets := []
@@ -1133,8 +1268,24 @@ func _take(a: Dictionary, e: Dictionary) -> void:
 func _open(a: Dictionary, e: Dictionary) -> void:
 	if not e["alive"]:
 		return
+	if e["mode"] == "break" and int(e["hp"]) > 1:   # 부수기: 세 번 쳐야 깨진다
+		e["hp"] = int(e["hp"]) - 1
+		_hit_anim(e)
+		if not a["bot"]:
+			Sfx.play("thud", -2.0)
+			_pop("쾅!" if int(e["hp"]) == 2 else "쩍!", (e["node"] as Node3D).global_position + Vector3(0, 0.8, 0))
+		return
 	e["alive"] = false
 	_open_anim(e)
+	if e["mode"] == "shake" and e["drop"] != Vector3.INF:
+		# 흔들면 위에 있던 게 툭 떨어진다
+		for t in e["inside"]:
+			var tn: Piece = t["node"]
+			var to: Vector3 = e["drop"]
+			var ftw := create_tween()
+			ftw.tween_interval(0.25)
+			ftw.tween_property(tn, "position", to + Vector3(0, 0.02, 0), 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+			t["lvl"] = _level_of(to.y)
 	var inside: Array = e["inside"]
 	for t in inside:
 		t["hidden"] = false
@@ -1145,12 +1296,18 @@ func _open(a: Dictionary, e: Dictionary) -> void:
 		n.scale = Vector3.ONE * 0.2
 		tw.tween_property(n, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if not a["bot"]:
+		var verb := {"break": "부서진 %s에서", "shake": "%s에서 떨어진"}.get(e["mode"], "%s 안에서") as String
+		if e["mode"] == "break":
+			Sfx.play("fail", -6.0)
+			Sfx.play("tear", -2.0)
 		if inside.is_empty():
-			Sfx.play("drop", -10.0)
-			_toast("%s 안은 비어 있어요" % e["name"])
+			if e["mode"] != "break":
+				Sfx.play("drop", -10.0)
+			_toast(("%s에는 아무것도 없어요" if e["mode"] == "shake" else "%s 안은 비어 있어요") % e["name"])
 		else:
-			Sfx.play("tear", -4.0)
-			_toast("%s 안에서 %s 발견" % [e["name"], (inside[0] as Dictionary)["name"]])
+			if e["mode"] != "break":
+				Sfx.play("tear", -4.0)
+			_toast((verb % e["name"]) + " " + str((inside[0] as Dictionary)["name"]) + " 발견!")
 	elif not inside.is_empty():
 		# 봇은 열자마자 집어 간다
 		a["goal"] = {"ref": inside[0]}
@@ -1314,8 +1471,8 @@ func _human_step(a: Dictionary, delta: float) -> void:
 		var e := act
 		_cancel_act()
 		_open(a, e)
-		# 안에 있던 봉투를 바로 노린다
-		if not (e["inside"] as Array).is_empty():
+		# 안에 있던 봉투를 바로 노린다 (부수기는 깨진 다음에만)
+		if not e["alive"] and not (e["inside"] as Array).is_empty():
 			act = e["inside"][0]
 
 
@@ -1403,7 +1560,10 @@ func _bot_step(a: Dictionary, delta: float) -> void:
 		a["goal"] = {}
 		a["wait"] = randf_range(0.2, 0.6) + (1.0 - float(Game.players[a["i"]]["quality"])) * 1.2
 	else:
-		if true:
+		if ref["mode"] == "break" and int(ref["hp"]) > 1:   # 봇도 세 번 친다 (목표 유지)
+			_open(a, ref)
+			a["wait"] = 0.35
+		else:
 			a["goal"] = {}
 			_open(a, ref)
 			a["wait"] = randf_range(0.1, 0.4)
@@ -1487,7 +1647,7 @@ func _update_aim() -> void:
 		return
 	var me: Vector3 = actors[0]["body"].global_position
 	var far: bool = (target["node"] as Node3D).global_position.distance_to(me) > REACH
-	var what: String = "줍기" if target["kind"] == "treasure" else "열기"
+	var what: String = "줍기" if target["kind"] == "treasure" else {"break": "부수기", "shake": "흔들기"}.get(target["mode"], "열기")
 	# 키 칩 [F] + "사물함 열기" / "사물함까지 가서 열기" / "사물함으로 가는 중"
 	prompt_key.visible = true
 	if target == act and aim.is_empty():
@@ -1735,7 +1895,7 @@ func _build_hud() -> void:
 		cell.gui_input.connect(func(ev): _slot_input(ev, idx))
 		hotbar.add_child(cell)
 		hot_slots.append(cell)
-	bv.add_child(UI.key_hints([["WASD", "이동"], ["F", "줍기 · 열기"], ["Space", "점프"], ["Tab", "근처 목록"], ["Q", "내려놓기"]], 18))
+	bv.add_child(UI.key_hints([["WASD", "이동"], ["F", "줍기 · 열기 · 부수기"], ["Space", "점프"], ["Q", "내려놓기"]], 18))
 	layer.add_child(bar)
 	UI.corner(bar, Control.PRESET_CENTER_BOTTOM, Vector2(0, 10))
 
@@ -1784,7 +1944,7 @@ func _build_hud() -> void:
 	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tipv.add_child(tt)
 	if Game.round_i == 1:   # 설명은 첫 라운드에만 (이후엔 장소 이름만)
-		var tdl := UI.label("서랍 · 사물함 · 상자를 열어 봉투를 찾으세요\n가구를 밟고 높은 곳에 올라가 보고, 상자를 밀면 밑에 쪽지가 있을지도 몰라요", 19, UI.SOFT)
+		var tdl := UI.label("서랍을 열고, 낡은 상자는 부수고, 책장은 흔들어 보세요\n화분 뒤 · 의자 밑 · 높은 곳 · 밀어 둔 상자 밑에도 숨어 있어요", 19, UI.SOFT)
 		tdl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tipv.add_child(tdl)
 	layer.add_child(tip)
@@ -2072,6 +2232,27 @@ func run_scenario(sc: String) -> void:
 				if a["bot"] and _envs(a).size() < 10:
 					var g: Dictionary = a["goal"]
 					print("[play] 느린 봇 %s @%s 목표 %s @%s wait=%.1f" % [Game.players[a["i"]]["name"], (a["body"] as Node3D).global_position.snapped(Vector3.ONE * 0.1), g["ref"]["name"] if not g.is_empty() else "-", ((g["ref"]["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)) if not g.is_empty() and is_instance_valid(g["ref"]["node"]) else Vector3.ZERO, float(a["wait"])])
+		"smash":   # 부수기 장면 확인: 부술 것 앞으로 가서 세 번 친다
+			for i in 20:
+				await get_tree().physics_frame
+			var tgt: Dictionary = {}
+			for e in containers:
+				if e["mode"] == "break" and not (e["inside"] as Array).is_empty():
+					tgt = e
+					break
+			var b: CharacterBody3D = actors[0]["body"]
+			var tp: Vector3 = (tgt["node"] as Node3D).global_position
+			b.global_position = Vector3(tp.x + 1.4, level_y(int(tgt["lvl"])) + 0.1, tp.z + 1.4)
+			b.reset_physics_interpolation()
+			cam_yaw = atan2(1.4, 1.4)
+			cam_pitch = -0.35
+			for i in 15:
+				await get_tree().physics_frame
+			for k in 3:
+				_open(actors[0], tgt)
+				for i in 12:
+					await get_tree().physics_frame
+			return
 		"follow":
 			for i in 30:
 				await get_tree().physics_frame
@@ -2183,6 +2364,8 @@ func _scenario_reach() -> void:
 		if s.begins_with("--lvl="):   # 특정 층 목표만 (막힘 재현용)
 			var want := int(s.substr(6))
 			pool = pool.filter(func(e): return int(e["lvl"]) == want)
+		if s == "--special":   # 부수기 · 흔들기 가구만
+			pool = pool.filter(func(e): return e.get("mode", "") in ["break", "shake"])
 		if s == "--secret":   # 숨은 자리 보물만
 			pool = pool.filter(func(e): return str(e.get("where", "")) != "")
 		if s.begins_with("--name="):
@@ -2200,9 +2383,11 @@ func _scenario_reach() -> void:
 		act = e
 		var t := 0.0
 		var trail := []
-		while e["alive"] and t < 25.0 and not act.is_empty():
+		while e["alive"] and t < 40.0 and (not act.is_empty() or e.get("mode", "") == "break"):
 			await get_tree().physics_frame
 			t += 1.0 / 60.0
+			if act.is_empty() and e["alive"] and e.get("mode", "") == "break" and int(t * 60) % 20 == 0:
+				act = e   # 부수기: F를 다시 누른다
 			if int(t * 60) % 30 == 0:
 				var bb: CharacterBody3D = me["body"]
 				var cn := []
@@ -2685,9 +2870,7 @@ func _build_camera() -> void:
 func _input(ev: InputEvent) -> void:
 	if finished:
 		return
-	if ev is InputEventKey and ev.pressed and not ev.echo and ev.physical_keycode == KEY_TAB:
-		_toggle_bag()
-		get_viewport().set_input_as_handled()
+	# v0.6.5: Tab 근처 목록은 뺐다 (근처 보물이 다 보여서 찾는 재미가 줄었다)
 
 
 func _toggle_bag() -> void:

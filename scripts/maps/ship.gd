@@ -113,6 +113,15 @@ static func _boathouse(h) -> void:
 	# 부두 소품: 상자 더미(밟고 오르기) · 술통 · 그물 · 밧줄 · 작업대 · 사무실
 	for p in [Vector3(-22.0, 0, 12.0), Vector3(-20.6, 0, 12.6), Vector3(14.0, 0, 13.4), Vector3(22.0, 0, -12.0), Vector3(-10.0, 0, -13.4)]:
 		Props.crate(h, p, Game.rng.randf_range(-0.2, 0.2), Vector3(1.2, 1.0, 1.0), 12, 13, "부두 상자")
+	Props.break_crate(h, Vector3(16.0, 0, 13.6), 0.2)
+	# 해적 키트 소품: 병 상자 · 병 · 삽 · 노 · 포탄 더미
+	h.kmodel("pirate/crate-bottles", Vector3(-18.0, 0, 13.6), 0.3, 0.95)
+	h.kmodel("pirate/bottle-large", Vector3(-17.2, 0, 13.1), 0.0, 0.5, false)
+	h.kmodel("pirate/tool-shovel", Vector3(23.4, 0, -14.4), 0.0, 1.9, false)
+	h.kmodel("pirate/tool-paddle", Vector3(24.2, 0, -14.4), 0.2, 1.9, false)
+	h.kmodel("pirate/cannon-ball", Vector3(4.5, 0, -13.6), 0.0, 0.45)
+	h.spot(Vector3(-18.6, 0.02, 14.4), "secret", "병 상자 뒤")
+	Props.break_crate(h, Vector3(-14.0, 0, -13.7), -0.1, Vector3(0.7, 0.6, 0.6))
 	Props.crate(h, Vector3(-22.0, 1.0, 12.0), 0.2, Vector3(1.0, 0.8, 0.9), 13, 13, "위 상자")
 	for p in [Vector3(-16.0, 0, 9.4), Vector3(-15.2, 0, 9.6), Vector3(18.0, 0, -9.5), Vector3(26.0, 0, 5.0), Vector3(26.5, 0, -5.0), Vector3(-23.5, 0, -3.0)]:
 		Props.barrel(h, p, 12, "부두 술통")
@@ -147,6 +156,13 @@ static func _hold(h) -> void:
 	for p in [Vector3(-10.0, 0, -4.4), Vector3(-8.6, 0, -4.4), Vector3(7.5, 0, -4.4), Vector3(-10.5, 0, 4.4), Vector3(8.5, 0, 4.4)]:
 		Props.crate(h, p, rng.randf_range(-0.2, 0.2), Vector3(1.1, 0.9, 0.9), 12, 13, "나무 상자")
 	Props.crate(h, Vector3(-9.3, 0.9, -4.4), 0.3, Vector3(0.8, 0.6, 0.7), 13, 13, "작은 상자")
+	Props.break_crate(h, Vector3(-2.5, 0, 4.5), 0.15)
+	h.kmodel("pirate/crate-bottles", Vector3(-3.6, 0, -4.7), 0.0, 0.85)
+	h.kmodel("pirate/barrel", Vector3(14.0, 0, 3.2), 0.0, 0.9)
+	h.spot(Vector3(14.3, 0.02, 4.1), "secret", "통 뒤")
+	Props.break_crate(h, Vector3(6.0, 0, -4.6), -0.2, Vector3(0.7, 0.6, 0.6))
+	for jp in [Vector3(-11.8, 0, 4.6), Vector3(-12.6, 0, 4.7)]:
+		Props.jar(h, jp, 12, "물 항아리", 0.7)
 	Props.chest(h, Vector3(-15.2, 0, 0.0), PI / 2, "숨겨진 보물상자")
 	for p in [Vector3(-1.6, 0, -4.5), Vector3(0.4, 0, -4.5), Vector3(-12.5, 0, 4.5), Vector3(-7.5, 0, -4.5)]:
 		Props.barrel(h, p, 13)
@@ -237,6 +253,8 @@ static func _cabin(h) -> void:
 	Props.bed(h, Vector3(-16.0, DECK_Y, 4.4), PI / 2, Color("#5E3A1E"), Color("#C94A4A"), Vector2(1.3, 1.6))
 	h.spot(Vector3(-15.6, DECK_Y + 0.6, 4.0), "open")
 	Props.cabinet(h, Vector3(-13.0, DECK_Y, -5.0), 0.0, 12, 13, "옷장")
+	h.kmodel("pirate/bottle", Vector3(-15.4, DECK_Y + 0.85, -0.55), 0.0, 0.32, false)
+	h.kmodel("pirate/crate", Vector3(-11.2, DECK_Y, 4.6), 0.4, 0.6)
 	Props.lamp(h, Vector3(-13.5, QD_Y - 0.4, 0.0), Color("#FFC27A"), 1.6, 7.0)
 	h.box(Vector3(-16.85, DECK_Y + 1.6, 1.5), Vector3(0.02, 0.9, 1.3), Color("#E8D2A0"), PI / 2, false, 0.0)
 	h.box(Vector3(-16.83, DECK_Y + 1.6, 1.5), Vector3(0.02, 0.5, 0.5), Color("#8A5A3B"), PI / 2, false, 0.0)
@@ -329,7 +347,10 @@ static func _gundeck(h) -> void:
 		h.beam(hp + Vector3(-1.0, 2.3, 0), hp + Vector3(-0.8, 1.3, 0), 0.03, Color("#C9B48A"))
 		h.beam(hp + Vector3(1.0, 2.3, 0), hp + Vector3(0.8, 1.3, 0), 0.03, Color("#C9B48A"))
 		h.part("capsule", Vector3(1.0, 1.0, 1.0), Color("#E8DCC0"), hp + Vector3(0, 1.25, 0), Vector3(0, 0, 90), 2.3)
-		h.spot(hp + Vector3(0.2, 1.42, 0), "open")
+		if k == 2:   # 해먹 흔들기: 위에 숨은 게 떨어진다
+			Props.shake_spot(h, hp + Vector3(0, 1.12, 0.22), hp + Vector3(0.2, 1.42, 0), hp + Vector3(0.5, 0, 0.8), 0.0, 0, "해먹", Vector3(1.6, 0.05, 0.05))
+		else:
+			h.spot(hp + Vector3(0.2, 1.42, 0), "open")
 	Props.table(h, Vector3(8.5, GUN_Y, 0.0), 0.0, Vector2(3.0, 1.2), Color("#8A6A47"), Color("#5E4128"), 2)
 	for k in 3:
 		h.cyl(Vector3(7.5 + k * 1.0, GUN_Y + 0.85, 0.2), 0.08, 0.16, 14, false, 10, 0.3)

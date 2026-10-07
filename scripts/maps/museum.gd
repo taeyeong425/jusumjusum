@@ -99,6 +99,12 @@ static func _hall(h) -> void:
 	Props.big_desk(h, Vector3(-4.2, 0, 10.5), PI / 2, Color("#E8E2D8"), Color("#8C3A45"), 0, "안내 데스크")
 	h.spot(Vector3(-4.85, 0.02, 10.9), "secret", "안내 데스크 밑")
 	Props.trash_can(h, Vector3(5.6, 0, 12.3), 14)
+	# 로비 쉼터: 소파 · 탁자 · 깔개 · 옷걸이
+	h.kmodel("furniture/rugRound", Vector3(4.6, 0.004, 9.0), 0.0, 0.01, false, 3.0)
+	h.kmodel("furniture/loungeSofa", Vector3(5.8, 0, 9.0), -PI / 2, 0.9)
+	h.kmodel("furniture/tableCoffee", Vector3(4.4, 0, 9.0), PI / 2, 0.45)
+	h.spot(Vector3(6.2, 0.02, 10.1), "secret", "소파 밑")
+	h.kmodel("furniture/coatRackStanding", Vector3(-6.3, 0, 8.4), 0.0, 1.75)
 	Props.extinguisher_box(h, Vector3(-6.8, 0.75, 11.0), PI / 2)
 	# 계단 → 북쪽 발코니 (2층 3.4)
 	h.stairs(Vector3(6.15, 0, -1.2), Vector3(6.15, 3.4, -8.4), 1.2, Color("#D6CFC4"))
@@ -181,12 +187,23 @@ static func _gallery_c(h) -> void:
 	Props.bench(h, Vector3(13.5, 0, -8.5), PI, Color("#3F3A36"), Color("#3F3A36"))
 	h.spot(Vector3(19.2, 0.02, -12.2), "open")
 	Props.trash_can(h, Vector3(19.3, 0, 1.2), 14)
+	for lp in [Vector3(19.3, 0, -12.3), Vector3(7.7, 0, -12.3)]:
+		h.kmodel("furniture/lampRoundFloor", lp, 0.0, 1.7)
 
 
 ## 창고: 상자 · 선반 · 사다리 (선반 꼭대기에 금봉투)
 static func _storage(h) -> void:
 	for p in [Vector3(9.5, 0, 4.0), Vector3(11.0, 0, 4.2), Vector3(16.5, 0, 11.6), Vector3(9.2, 0, 11.4), Vector3(18.6, 0, 7.5)]:
 		Props.crate(h, p, Game.rng.randf_range(-0.3, 0.3), Vector3(1.0, 0.75, 0.8), 12, 13, "포장 상자")
+	Props.break_crate(h, Vector3(13.0, 0, 3.2), 0.1, Vector3(0.8, 0.7, 0.7), "부서진 운송 상자")
+	Props.break_crate(h, Vector3(17.8, 0, 9.8), -0.2, Vector3(0.7, 0.6, 0.6), "부서진 운송 상자")
+	# 골판지 상자 더미 · 열린 상자 속
+	h.kmodel("furniture/cardboardBoxClosed", Vector3(10.0, 0, 9.6), 0.2, 0.6)
+	h.kmodel("furniture/cardboardBoxClosed", Vector3(10.05, 0.6, 9.6), -0.1, 0.55)
+	h.kmodel("furniture/cardboardBoxOpen", Vector3(11.2, 0, 10.2), 0.4, 0.5)
+	h.spot(Vector3(11.2, 0.06, 10.2), "secret", "열린 상자 속")
+	for jp in [Vector3(8.0, 0, 7.5), Vector3(8.0, 0, 8.4)]:
+		Props.jar(h, jp, 13, "복제품 항아리", 0.75)
 	Props.crate(h, Vector3(9.5, 0.75, 4.0), 0.4, Vector3(0.7, 0.55, 0.6), 13, 13, "작은 상자")
 	Props.bookshelf(h, Vector3(13.5, 0, 12.6), PI, 3.0, Color("#7A7F85"), 4, true)
 	# 높은 선반 + 사다리 (꼭대기 2.6)
