@@ -1081,8 +1081,8 @@ func _take(a: Dictionary, e: Dictionary) -> void:
 		Sfx.play("pick" if e["tier"] != "gold" else "star", -2.0)
 		slot = _envs(a).size() - 1
 		_refresh_hotbar()
-		var more := {"note": "", "env": " · 덩어리 2개", "gold": " · 덩어리 3개"}
-		_toast("%s 찾았어요%s" % [e["name"], more[e["tier"]]])
+		if e["tier"] == "gold":   # 머리 위 "+쪽지" · 가방 칸으로 충분 — 금봉투만 따로 알린다
+			_toast("금봉투! 덩어리 3개")
 		_pop("+ " + e["name"], a["body"].global_position + Vector3(0, 2.5, 0))
 		_squash(a["vis"], 0.9)
 
@@ -1449,8 +1449,9 @@ func _update_aim() -> void:
 	# 키 칩 [F] + "사물함 열기" / "사물함까지 가서 열기" / "사물함으로 가는 중"
 	prompt_key.visible = true
 	if target == act and aim.is_empty():
+		# 자동으로 가는 중엔 글자 없이 (캐릭터가 걸어가는 게 보이고 대상은 빛난다)
 		prompt_key.visible = false
-		hud_prompt.text = "%s %s" % [target["name"], "여는 중" if hold_prog > 0.0 else "(으)로 가는 중"]
+		hud_prompt.text = ""
 	elif far:
 		hud_prompt.text = "%s까지 가서 %s" % [target["name"], what]
 	else:
@@ -1740,9 +1741,10 @@ func _build_hud() -> void:
 	var tt := UI.label(Themes.INFO[Game.theme]["name"], 30, UI.INK, true)
 	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tipv.add_child(tt)
-	var tdl := UI.label("서랍 · 사물함 · 상자를 열어 봉투를 찾으세요\n가구를 밟고 높은 곳에 올라가 보고, 상자를 밀면 밑에 쪽지가 있을지도 몰라요", 19, UI.SOFT)
-	tdl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tipv.add_child(tdl)
+	if Game.round_i == 1:   # 설명은 첫 라운드에만 (이후엔 장소 이름만)
+		var tdl := UI.label("서랍 · 사물함 · 상자를 열어 봉투를 찾으세요\n가구를 밟고 높은 곳에 올라가 보고, 상자를 밀면 밑에 쪽지가 있을지도 몰라요", 19, UI.SOFT)
+		tdl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tipv.add_child(tdl)
 	layer.add_child(tip)
 	UI.corner(tip, Control.PRESET_CENTER_TOP, Vector2(0, 16))
 	tip.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -1795,7 +1797,7 @@ func _update_hud(delta: float) -> void:
 		for a in actors:
 			if a["i"] != 0:
 				var lb: Label3D = (a["body"] as Node).get_meta("label")
-				lb.text = "%s · 봉투 %d" % [Game.players[a["i"]]["name"], _envs(a).size()]
+				lb.text = str(Game.players[a["i"]]["name"])
 	for w in [30, 10, 5, 4, 3, 2, 1]:
 		if time_left <= w and not warned.has(w):
 			warned[w] = true
@@ -2535,7 +2537,7 @@ func _draw_fx() -> void:
 		fx.draw_arc(mouse, 12.5, 0, TAU, 24, Color(UI.INK, 0.35), 1.0)
 	if not tearing:
 		if not aim.is_empty() and not aim.get("bolted", false):
-			_draw_hand(mouse + Vector2(28, 30), 0.85, 0.0, 0.0)
+			pass   # 조준점 색 + F 안내로 충분 (손 아이콘은 뺐다)
 		return
 	var wp: Vector3 = (act["node"] as Node3D).global_position
 	if cam.is_position_behind(wp):

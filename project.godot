@@ -24,7 +24,7 @@ window/stretch/aspect="expand"
 [gui]
 
 theme/custom="res://assets/theme.tres"
-theme/custom_font="res://assets/fonts/NanumGothic-Regular.ttf"
+theme/custom_font="res://assets/fonts/Pretendard-Regular.otf"
 theme/default_font_antialiasing=1
 
 [physics]

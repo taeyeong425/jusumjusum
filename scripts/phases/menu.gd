@@ -88,7 +88,7 @@ func _ready() -> void:
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(foot)
 
-	var credit := UI.label("v0.6.3 · Godot · 나눔고딕 (OFL) · Kenney 효과음 (CC0)", 18, Color(UI.SOFT, 0.55))
+	var credit := UI.label("v0.6.4 · Godot · Pretendard (OFL) · Kenney 효과음 (CC0)", 18, Color(UI.SOFT, 0.55))
 	layer.add_child(credit)
 	UI.corner(credit, Control.PRESET_BOTTOM_RIGHT, Vector2(16, 10))
 

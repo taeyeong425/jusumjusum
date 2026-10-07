@@ -1,6 +1,6 @@
 [gd_resource type="Theme" format=3]
 
-[ext_resource type="FontFile" path="res://assets/fonts/NanumGothic-Regular.ttf" id="1_5x3i2"]
+[ext_resource type="FontFile" path="res://assets/fonts/Pretendard-Regular.otf" id="1_5x3i2"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5x3i2"]
 content_margin_left = 14.0

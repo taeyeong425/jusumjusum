@@ -195,9 +195,6 @@ func _build_room() -> void:
 		model.add_child(Piece.from_dict(d, false))
 	var mtw := create_tween().set_loops()
 	mtw.tween_property(model, "rotation:y", TAU, 9.0).from(0.0)
-	var ml := UI.label3d("참고 모형", 22, Color("#5A4636"))
-	ml.position = Vector3(-2.9, 1.15, -2.9)
-	add_child(ml)
 	# 스포트라이트 둘 (따뜻한 빛, 받침대에 그림자)
 	for sp in [[Vector3(3.5, 5.0, 3.0), Color("#FFE9C8")], [Vector3(-3.0, 5.0, 2.0), Color("#FFF4E6")]]:
 		var l := SpotLight3D.new()
@@ -355,6 +352,8 @@ func _build_hud() -> void:
 	hud_sel = UI.label("", 18, UI.SOFT)
 	hud_sel.custom_minimum_size.x = 220
 	hud_sel.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# 고른 덩어리 정보(이름 · 크기 · 색)는 화면에 보이는 그대로라 숨긴다
+	hud_sel.visible = false
 	rv.add_child(hud_sel)
 	layer.add_child(right)
 	UI.corner(right, Control.PRESET_CENTER_RIGHT)

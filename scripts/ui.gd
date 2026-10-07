@@ -1,7 +1,7 @@
 class_name UI
 extends RefCounted
-## UI 헬퍼. 톤 (v0.5): 깔끔한 장난감 — 흰 카드 · 한 가지 강조색 버튼 · 나눔고딕
-const FONT_SCALE := 0.84   # 나눔고딕은 손글씨보다 커 보여서 전체를 줄인다
+## UI 헬퍼. 톤 (v0.5): 깔끔한 장난감 — 흰 카드 · 한 가지 강조색 버튼 · Pretendard
+const FONT_SCALE := 0.88   # 글자 크기 전체 배율 (Pretendard 기준)
 
 const BG := Color("#F6EEDD")
 const PAPER := Color("#FFF8EC")

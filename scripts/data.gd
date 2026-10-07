@@ -97,9 +97,9 @@ static func color(i: int) -> Color:
 
 static func load_fonts() -> void:
 	if font_regular == null:
-		# v0.5: 손글씨(Gaegu) → 나눔고딕. "UI · 폰트가 유치하다" 피드백
-		font_regular = load("res://assets/fonts/NanumGothic-Regular.ttf")
-		font_bold = load("res://assets/fonts/NanumGothic-Bold.ttf")
+		# v0.5: 손글씨(Gaegu) → 나눔고딕. v0.6.4: → Pretendard ("글자가 조잡하다" 피드백 — 한국어 UI 표준에 가까운 글꼴)
+		font_regular = load("res://assets/fonts/Pretendard-Regular.otf")
+		font_bold = load("res://assets/fonts/Pretendard-Bold.otf")
 		for f in [font_regular, font_bold]:   # 선명하게: 가벼운 힌팅 · 서브픽셀 위치
 			if f is FontFile:
 				(f as FontFile).hinting = TextServer.HINTING_LIGHT

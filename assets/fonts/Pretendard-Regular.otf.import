@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://vjjjbefs5ah6"
-path="res://.godot/imported/NanumGothic-Regular.ttf-c341778b694eaa84ce5137e4ac9fe2c9.fontdata"
+uid="uid://cdt81sctqbtv1"
+path="res://.godot/imported/Pretendard-Regular.otf-375f78108183715aa325a9c9dc71177f.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/NanumGothic-Regular.ttf"
-dest_files=["res://.godot/imported/NanumGothic-Regular.ttf-c341778b694eaa84ce5137e4ac9fe2c9.fontdata"]
+source_file="res://assets/fonts/Pretendard-Regular.otf"
+dest_files=["res://.godot/imported/Pretendard-Regular.otf-375f78108183715aa325a9c9dc71177f.fontdata"]
 
 [params]
 

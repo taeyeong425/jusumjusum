@@ -1,7 +1,7 @@
 # 주섬주섬 (가제) — 프로토타입 v0.6.3 · 보물찾기
 
 > 놀이터를 뜯어 덩어리를 모으고, 정해진 물건을 만들어, 다 같이 할당량을 넘기는 창작 파티게임.
-> 그래픽: 반짝이는 장난감 플라스틱 · 장난감 인형 캐릭터 · 깔끔한 UI(나눔고딕). (v0.4의 레고풍은 "조립이 레고 방식이 아니다"는 피드백으로 뺐다)
+> 그래픽: 반짝이는 장난감 플라스틱 · 장난감 인형 캐릭터 · 깔끔한 UI(Pretendard). (v0.4의 레고풍은 "조립이 레고 방식이 아니다"는 피드백으로 뺐다)
 
 Godot 4.7 · 웹(HTML5) 빌드 · 플레이어 1명 + 봇 5명
 
@@ -213,6 +213,6 @@ tests/            판정 보정 · 밸런스 시뮬레이션 · 글리프 확인
 
 ## 라이선스
 
-- 폰트: 나눔고딕 — SIL Open Font License (`assets/fonts/OFL-*.txt`)
+- 폰트: Pretendard — SIL Open Font License (`assets/fonts/OFL-*.txt`)
 - 효과음: Kenney Impact Sounds · Interface Sounds — CC0 (`assets/sfx/License-*.txt`)
 - 엔진: Godot Engine (MIT)

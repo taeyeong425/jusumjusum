@@ -75,6 +75,7 @@ var per := 10.0
 var pivot: Node3D
 var cam: Camera3D
 var title: Label
+var explained := false
 var count_l: Label
 var sub: Label
 var timer_l: Label
@@ -171,7 +172,14 @@ func _show(k: int) -> void:
 	if plaque:
 		plaque.text = "「%s」\n작품 %s · %s\n%s" % [ttl, letter, Themes.INFO[Game.theme]["name"], "재질: " + _finish_text(Game.players[who]["work"])]
 	var mine := who == 0
-	sub.text = ("내 작품이에요. 이번엔 구경만 해요" if mine else "%s처럼 보이나요? 별을 끌어서 점수를 주세요" % Game.target["name"])
+	if mine:
+		sub.text = "내 작품이에요. 이번엔 구경만 해요"
+	elif not explained:   # 안내는 처음 평가하는 작품에서만
+		explained = true
+		sub.text = "%s처럼 보이나요? 별을 끌어서 점수를 주세요" % Game.target["name"]
+	else:
+		sub.text = ""
+	sub.visible = sub.text != ""
 	rate_box.visible = not mine
 	_refresh()
 
@@ -187,11 +195,18 @@ func _refresh() -> void:
 	bar.set_value(Game.human_ratings.get(who, 3.0))
 	value_l.text = "%.1f" % bar.value
 	top_l.text = ("4.6점 이상은 이미 다른 작품에 줬어요" if top_used else "4.6점 이상은 한 작품에만 줄 수 있어요")
+	_top_hint()
 
 
 func _rate(v: float) -> void:
 	Game.human_ratings[order[idx]] = v
 	value_l.text = "%.1f" % v
+	_top_hint()
+
+
+## "4.6점 이상은 한 작품만" 안내: 높은 점수를 줄 때만 보인다
+func _top_hint() -> void:
+	top_l.modulate.a = 1.0 if bar.value >= 4.4 or bar.max_v < 5.0 else 0.0
 
 
 func _process(delta: float) -> void:
