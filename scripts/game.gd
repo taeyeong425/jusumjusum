@@ -9,6 +9,7 @@ const CARD_BONUS := 0.5         # 카드 성공 = 그 라운드 점수 +0.5 (전
 
 var rng := RandomNumberGenerator.new()
 var short_mode := false
+var practice := false            # 조립만 해 보기 (보물찾기 없이 덩어리를 받고 바로 조립 — 조립 피드백용)
 var autotest := false
 
 var round_i := 1
@@ -43,6 +44,8 @@ func t_collect() -> float:
 
 
 func t_build() -> float:
+	if practice and not autotest:
+		return 600.0
 	return 2.0 if autotest else (150.0 if short_mode else 270.0)
 
 
@@ -50,7 +53,24 @@ func t_exhibit() -> float:
 	return 0.6 if autotest else (6.0 if short_mode else 10.0)
 
 
+## 조립만 해 보기: 무작위 장소 · 물건, 모두에게 덩어리 꾸러미를 주고 조립부터
+func new_practice() -> void:
+	new_game()
+	practice = true
+	theme = Themes.ORDER[rng.randi() % Themes.ORDER.size()]
+	var tpls := Themes.targets_for(theme)
+	target = tpls[rng.randi() % tpls.size()]
+	for p in players:
+		var inv: Array = p["inventory"]
+		for t in Data.TYPES:
+			for k in 2:
+				inv.append(Themes.make_part(theme, t, rng))
+		for k in 4:
+			inv.append(Themes.make_part(theme, Data.TYPES[rng.randi() % Data.TYPES.size()], rng))
+
+
 func new_game() -> void:
+	practice = false
 	round_i = 1
 	tickets = 0
 	history = []

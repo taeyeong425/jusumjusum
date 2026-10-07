@@ -480,6 +480,7 @@ func _spawn(inv_i: int, from: Dictionary = {}) -> Piece:
 	anim[p] = target
 	_select(p)
 	_refresh_tray()
+	_pop_in(p)
 	UI.sfx("place", -4.0)
 	# 들고 오기: 커서를 따라오다가 클릭한 곳에 놓인다 (빌드 게임식)
 	if from.is_empty() and not Game.autotest:
@@ -510,10 +511,44 @@ func _delete() -> void:
 	var p := selected
 	_select(null)
 	anim.erase(p)
-	work_root.remove_child(p)
-	p.queue_free()
+	p.reparent(self)   # 작품에서 빼고, 작아지며 사라진다
+	if p.body:
+		p.body.collision_layer = 0
+	var tw := create_tween()
+	tw.tween_property(p.vis, "scale", p.vis.scale * 0.05, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_callback(p.queue_free)
 	_refresh_tray()
 	UI.sfx("drop", -6.0)
+
+
+## 부드러운 반응들 ───────────────────────────
+## 꺼낸 덩어리가 톡 커지며 나타난다 (배율은 늘 지금 크기 기준 — 도중에 크기를 바꿔도 안 어긋나게)
+func _pop_in(p: Piece) -> void:
+	_scale_anim(p, [[0.2, 1.0, 0.24]])
+
+
+## 딱 붙거나 놓을 때 살짝 튕긴다
+func _bump(p: Piece) -> void:
+	_scale_anim(p, [[1.0, 1.07, 0.06], [1.07, 1.0, 0.12]])
+
+
+func _scale_anim(p: Piece, steps: Array) -> void:
+	if not is_instance_valid(p):
+		return
+	var tw := create_tween()
+	for st in steps:
+		tw.tween_method(func(f: float):
+			if is_instance_valid(p):
+				p.vis.scale = p.pscale * f, st[0], st[1], st[2]).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 회전을 짧게 돌려서 (순간이동 대신)
+func _rotate_to(p: Piece, b1: Basis) -> void:
+	var q0 := p.quaternion
+	var q1 := b1.get_rotation_quaternion()
+	create_tween().tween_method(func(t: float):
+		if is_instance_valid(p):
+			p.quaternion = q0.slerp(q1, t), 0.0, 1.0, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _apply_color(ci: int) -> void:
@@ -552,7 +587,7 @@ func _turn(a: float) -> void:
 	if not selected:
 		return
 	_push_undo()
-	selected.basis = Basis(Vector3.UP, a) * selected.basis
+	_rotate_to(selected, Basis(Vector3.UP, a) * Basis(selected.quaternion))
 	UI.sfx("select", -12.0)
 
 
@@ -560,7 +595,7 @@ func _straighten() -> void:
 	if not selected:
 		return
 	_push_undo()
-	selected.basis = Basis.IDENTITY
+	_rotate_to(selected, Basis.IDENTITY)
 	UI.sfx("select", -12.0)
 
 
@@ -930,6 +965,7 @@ func _contact_snap(p: Vector3, tol: float) -> Vector3:
 	_guide(oc2, out)
 	if snap_note != "딱 붙음" or snap_t <= 0.0:
 		UI.sfx("tick", -16.0)
+		_bump(selected)
 	_note("딱 붙음")
 	return out
 
@@ -976,6 +1012,7 @@ func _attach_nearest() -> void:
 	anim[selected] = target
 	UI.sfx("place", -8.0)
 	_note("딱 붙이기")
+	get_tree().create_timer(0.12).timeout.connect(func(): _bump(selected))
 
 
 func _guide(a: Vector3, b: Vector3) -> void:

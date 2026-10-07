@@ -54,6 +54,11 @@ func _ready() -> void:
 	elif _arg("--scenario=") != "":
 		var sc := _arg("--scenario=")
 		Game.new_game()
+		if sc == "practice":   # 조립만 해 보기 화면 확인
+			Game.new_practice()
+			print("[practice] %s · %s · 덩어리 %d개 · 시간 %.0f초" % [Game.theme, Game.target["name"], Game.human()["inventory"].size(), Game.t_build()])
+			goto("build")
+			return
 		if sc == "ceremony":
 			var tiers := ["note", "env", "gold", "note", "env", "note", "note"]
 			for tr in tiers:

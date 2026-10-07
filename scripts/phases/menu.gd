@@ -26,6 +26,11 @@ func _ready() -> void:
 	var start := UI.primary("시작하기", _start, 34)
 	start.custom_minimum_size = Vector2(300, 64)
 	col.add_child(_centered(start))
+	var prac := UI.button("조립만 해 보기", func():
+		Game.new_practice()
+		Game.goto("build"), 20)
+	prac.tooltip_text = "보물찾기 없이 덩어리를 받아 바로 조립해요 (10분)"
+	col.add_child(_centered(prac))
 
 	var opts := UI.hbox(28)
 	opts.alignment = BoxContainer.ALIGNMENT_CENTER

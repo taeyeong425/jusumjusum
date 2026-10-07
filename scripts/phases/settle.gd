@@ -159,7 +159,12 @@ func _show_verdict() -> void:
 		c.queue_free()
 	if not v["pass"] and Game.tickets >= 3 and not Game.lowered_this_round:
 		buttons.add_child(UI.button("티켓 3장 써서 통과 조건 낮추기", _lower, 22))
-	if Game.round_i < Game.ROUNDS:
+	if Game.practice:
+		buttons.add_child(UI.button("처음으로", func(): Game.goto("menu"), 22))
+		primary = UI.primary("조립 다시 하기", func():
+			Game.new_practice()
+			Game.goto("build"), 26)
+	elif Game.round_i < Game.ROUNDS:
 		primary = UI.primary("다음 라운드", _next_round, 26)
 	else:
 		primary = UI.primary("최종 결과 보기", _to_gallery, 26)
