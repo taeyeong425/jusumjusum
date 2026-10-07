@@ -52,6 +52,7 @@ func _ready() -> void:
 	# 만들 것 견본 (3D, 천천히 돈다)
 	var svc := SubViewportContainer.new()
 	svc.custom_minimum_size = Vector2(280, 280)
+	svc.size_flags_vertical = Control.SIZE_SHRINK_CENTER   # 줄 가운데 (작은 창에서 아래로 처졌다)
 	svc.stretch = true
 	row.add_child(svc)
 	var sv := SubViewport.new()
@@ -86,7 +87,7 @@ func _ready() -> void:
 	row.add_child(fp)
 	var fv := UI.vbox(6)
 	fp.add_child(fv)
-	fp.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	fp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	fv.add_child(UI.label("재료 · %s" % Game.formation, 26, UI.INK, true))
 	fv.add_child(UI.label(Data.FORMATIONS[Game.formation], 19, UI.SOFT))
 	var grid := GridContainer.new()
@@ -112,6 +113,7 @@ func _ready() -> void:
 	# 할당량 + 카드
 	var rp := UI.vbox(16)
 	rp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(rp)
 	var qp := UI.panel()
 	rp.add_child(qp)

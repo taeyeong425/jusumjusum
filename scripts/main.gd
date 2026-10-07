@@ -81,8 +81,12 @@ func _ready() -> void:
 		if sc != "ceremony":
 			current.call("run_scenario", sc)
 	elif Game.autotest:
-		Game.new_game()
-		goto("reveal")
+		if "--practice" in OS.get_cmdline_user_args():   # 조립만 해 보기 흐름 끝까지
+			Game.new_practice()
+			goto("build")
+		else:
+			Game.new_game()
+			goto("reveal")
 	else:
 		goto("menu")
 

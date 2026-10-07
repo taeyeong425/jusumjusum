@@ -139,7 +139,14 @@ func _process(delta: float) -> void:
 		_show_verdict()
 	if Game.autotest and shown and reveal_t > 4.0:
 		set_process(false)
-		if Game.round_i < Game.ROUNDS:
+		if Game.practice:
+			var labels := []
+			for b in buttons.get_children():
+				if b is Button:
+					labels.append((b as Button).text)
+			print("[autotest] OK — practice 결과 버튼 %s" % str(labels))
+			get_tree().quit(0)
+		elif Game.round_i < Game.ROUNDS:
 			_next_round()
 		else:
 			_to_gallery()
