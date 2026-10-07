@@ -81,6 +81,17 @@ var _sb_cache := {}
 func _ready() -> void:
 	time_left = Game.t_collect()
 	var th: Dictionary = Themes.INFO[Game.theme]
+	# 지도 · 길 계산 동안 가림막 (카메라가 자리 잡기 전 엉뚱한 화면이 깜빡였다)
+	var cover_l := CanvasLayer.new()
+	cover_l.layer = 50
+	add_child(cover_l)
+	var cover := ColorRect.new()
+	cover.color = Color("#24303B")
+	cover_l.add_child(UI.full(cover))
+	var cl := UI.label("%s로 가는 중" % th["name"], 30, Color("#F4F1E6", 0.8), true)
+	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cover.add_child(UI.full(cl))
 	UI.make_env(self, Color(th["sky"]))
 	_indoor_env()
 	world = Node3D.new()
@@ -105,6 +116,12 @@ func _ready() -> void:
 	if not OS.has_feature("web") and not Game.autotest and DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # 웹은 첫 클릭에서 (브라우저 규칙)
 	ready_done = true
+	_update_camera(1.0)
+	cam_pivot.global_position = (actors[0]["body"] as Node3D).global_position + Vector3(0, 2.05, 0)
+	var ctw := create_tween()
+	ctw.tween_interval(0.15)
+	ctw.tween_property(cover, "modulate:a", 0.0, 0.35)
+	ctw.tween_callback(cover_l.queue_free)
 
 
 var ready_done := false
@@ -1727,7 +1744,7 @@ func _build_hud() -> void:
 	var bpv := UI.vbox(4)
 	bag_panel.add_child(bpv)
 	bpv.add_child(UI.label("근처에 있는 것", 24, UI.INK, true))
-	bpv.add_child(UI.label("눌러서 줍기 · 열기", 18, UI.SOFT))
+
 	bag_list = UI.vbox(3)
 	bpv.add_child(bag_list)
 	bag_panel.custom_minimum_size = Vector2(320, 0)
@@ -1777,8 +1794,7 @@ func _refresh_bag(delta: float) -> void:
 		bag_list.add_child(UI.label("근처에 보이는 게 없어요", 18, UI.SOFT))
 	for k in mini(near.size(), 9):
 		var e: Dictionary = near[k][1]
-		var txt: String = ("줍기 · " if e["kind"] == "treasure" else "열기 · ") + e["name"]
-		var b := UI.button("%s   %.1fm" % [txt, near[k][0]], func(): _try_pick_entry(e), 18)
+		var b := UI.button("%s   %.0fm" % [e["name"], near[k][0]], func(): _try_pick_entry(e), 18)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		UI.tile_button(b)
 		bag_list.add_child(b)
@@ -2071,6 +2087,10 @@ func run_scenario(sc: String) -> void:
 							for i in 10:
 								await get_tree().physics_frame
 			cam_yaw = 0.6
+			if OS.get_cmdline_user_args().has("--bag"):
+				for i in 20:
+					await get_tree().physics_frame
+				_toggle_bag()
 			return
 	print("[scenario] done")
 	get_tree().quit()

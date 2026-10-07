@@ -135,10 +135,11 @@ func _build_room() -> void:
 	cs.position.y = -0.1
 	body.add_child(cs)
 	add_child(body)
-	var front := UI.label3d("정면", 28, Color("#E9E2D6"))
+	var front := UI.label3d("▲ 정면", 16, Color("#E9E2D6", 0.55))   # 전시 때 이쪽에서 본다 (작고 옅게)
+	front.outline_size = 0
 	front.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	front.rotation_degrees = Vector3(-90, 0, 0)
-	front.position = Vector3(0, 0.005, TABLE - 0.18)
+	front.position = Vector3(0, 0.005, TABLE - 0.12)
 	add_child(front)
 	# 벽 둘 (뒤 · 왼쪽) — 판벽 · 몰딩 · 창문
 	var wc := Color("#EDE6DA")

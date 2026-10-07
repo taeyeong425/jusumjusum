@@ -165,6 +165,6 @@ static func targets_for(theme: String) -> Array:
 
 ## 자동 작품 제목 (출품 이름표)
 static func auto_title(target: String, rng: RandomNumberGenerator) -> String:
-	var pats := ["무제 — %s", "%s의 오후", "작은 %s", "꿈꾸는 %s", "기억 속의 %s", "%s, 두 번째", "어느 날의 %s", "%s 습작 #%d", "빛나는 %s", "조용한 %s"]
+	var pats := ["무제 (%s)", "%s의 오후", "작은 %s", "꿈꾸는 %s", "기억 속의 %s", "%s, 두 번째", "어느 날의 %s", "%s 습작 #%d", "빛나는 %s", "조용한 %s"]
 	var p: String = pats[rng.randi() % pats.size()]
 	return p % [target, rng.randi_range(2, 9)] if p.contains("%d") else p % target

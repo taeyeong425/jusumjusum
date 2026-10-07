@@ -121,27 +121,33 @@ func _build_hud() -> void:
 	var v := UI.vbox(6)
 	p.add_child(v)
 	var reached: int = Game.get_meta("reached") if Game.has_meta("reached") else Game.round_i
-	v.add_child(UI.label("오늘의 전시회", 40, UI.INK, true))
-	v.add_child(UI.label("할당량 통과 %d / %d라운드 · 최고 기록 %d" % [reached, Game.history.size(), Game.best_record], 24, UI.INK))
-	v.add_child(UI.label("최종 등수 (3라운드 평점 합계)", 26, UI.INK, true))
+	v.add_child(UI.label("전시회 결과", 36, UI.INK, true))
+	v.add_child(UI.label("%d라운드 중 %d번 통과" % [Game.history.size(), reached], 21, UI.SOFT))
+	# 순위표: 등수 · 이름 · 합계 별점 · 라운드 1등 횟수
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 20)
+	grid.add_theme_constant_override("v_separation", 4)
+	v.add_child(grid)
 	var rank := 0
 	for row in Game.standings():
 		rank += 1
 		var i: int = row["i"]
 		var nm: String = "나" if i == 0 else Game.players[i]["name"]
-		var per := []
-		for s in row["per"]:
-			per.append("%.1f" % s)
 		var wins := 0
 		for rec in Game.history:
 			if Game.round_top(rec) == i:
 				wins += 1
-		var line := "%d등  %s  ★%.1f   (%s)%s" % [rank, nm, row["total"], " + ".join(per), ("   라운드 1등 ×%d" % wins) if wins > 0 else ""]
-		var col := UI.ACCENT if i == 0 else (Color("#B07800") if rank == 1 else UI.INK)
-		v.add_child(UI.label(line, 24 if rank == 1 else 20, col, rank == 1 or i == 0))
+		var col := UI.ACCENT if i == 0 else UI.INK
+		var big := 24 if rank == 1 else 20
+		grid.add_child(UI.label("%d" % rank, big, UI.SOFT, true))
+		grid.add_child(UI.label(nm, big, col, rank == 1 or i == 0))
+		grid.add_child(UI.label("★%.1f" % row["total"], big, col, rank == 1 or i == 0))
+		grid.add_child(UI.label(("1등 ×%d" % wins) if wins > 0 else "", 18, UI.SOFT))
+	v.add_child(Control.new())
 	var h := UI.hbox(12)
 	v.add_child(h)
-	h.add_child(UI.primary("한 판 더", _again, 26))
+	h.add_child(UI.primary("다시 하기", _again, 26))
 	h.add_child(UI.button("처음으로", func(): Game.goto("menu"), 22))
 	layer.add_child(p)
 	UI.corner(p, Control.PRESET_TOP_LEFT)
@@ -182,7 +188,7 @@ func _process(delta: float) -> void:
 	var target_x := k * span
 	cam.position = Vector3(target_x, 2.3, 6.2)
 	cam.look_at(Vector3(target_x, 1.3, 0))
-	if Game.autotest and t > 0.5:
+	if Game.autotest and t > (8.0 if OS.get_cmdline_user_args().has("--linger") else 0.5):   # --linger = 화면 확인용
 		print("[autotest] OK — reached %s, history %d" % [str(Game.get_meta("reached")), Game.history.size()])
 		get_tree().quit(0)
 
