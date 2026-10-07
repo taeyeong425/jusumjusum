@@ -197,7 +197,18 @@ func _col(c) -> Color:
 	return Data.color(c) if c is int else c
 
 
+var audit_on := OS.get_cmdline_user_args().has("--scenario=solids")
+var audit: Array = []   # [로컬 크기, 변환, 지도 코드 위치, 층]
+
 func _batch_add(mesh: Mesh, xf: Transform3D, c, gloss := 0.55) -> void:
+	if audit_on:
+		var where := "?"
+		for fr in get_stack():
+			if str(fr["source"]).contains("/maps/"):
+				where = "%s:%d %s" % [str(fr["source"]).get_file(), fr["line"], fr["function"]]
+				break
+		var ab := mesh.get_aabb()
+		audit.append([ab.size * xf.basis.get_scale(), xf * Transform3D(Basis(), ab.get_center()), where, lvl])
 	var col := _col(c)
 	var key := "%s_%.2f" % [col.to_html(), gloss]
 	var b: Dictionary = batches[lvl]
@@ -255,6 +266,11 @@ func _plain_box(size: Vector3) -> Mesh:
 
 
 ## 상자 하나 (중심 · 크기, 지도 단위). round = 모서리 반지름
+## 보이지 않는 충돌만 (지도 좌표)
+func block(center: Vector3, size: Vector3, yaw := 0.0) -> void:
+	_solid(P(center), size * W, yaw)
+
+
 func box(center: Vector3, size: Vector3, c, yaw := 0.0, collide := true, round := 0.04, gloss := 0.55) -> void:
 	_box_raw(P(center), size * W, c, yaw, collide, round * W, gloss)
 
@@ -309,7 +325,9 @@ func cyl_rot(center: Vector3, radius: float, height: float, c, rot_deg: Vector3,
 	_batch_add(_cyl_mesh(radius * W, height * W, -1.0, sides), Transform3D(Basis.from_euler(rot_deg * PI / 180.0), P(center)), c)
 
 
-func ball(center: Vector3, radius: float, c, squash := Vector3.ONE) -> void:
+func ball(center: Vector3, radius: float, c, squash := Vector3.ONE, collide := false) -> void:
+	if collide:
+		_solid(P(center), Vector3.ONE * radius * 1.6 * W * squash)
 	var key := "sp%.3f" % (radius * W)
 	if not _mesh_cache.has(key):
 		var sm := SphereMesh.new()
@@ -331,9 +349,11 @@ func beam(a: Vector3, b: Vector3, t: float, c) -> void:
 	_batch_add(_rbox_mesh(Vector3(t * W, d.length(), t * W), 0.0), Transform3D(Basis(x, y, z), (pa + pb) * 0.5), c)
 
 
-func part(t: String, spec, c, pos: Vector3, rot_deg := Vector3.ZERO, k := 1.0) -> void:
+func part(t: String, spec, c, pos: Vector3, rot_deg := Vector3.ZERO, k := 1.0, solid := false) -> void:
 	var shp: Vector3 = spec if spec is Vector3 else Data.variant(t, int(spec))[1]
 	var mk := Data.mesh_key(t, shp)
+	if solid:   # 장식 조각도 부딪히게 (몸통 상자로 대충)
+		_solid(P(pos), Data.base_size(mk) * shp * k * W * 0.85, deg_to_rad(rot_deg.y))
 	var xf := Transform3D(Basis.from_euler(rot_deg * PI / 180.0), P(pos)) * Transform3D(Basis.from_scale(shp * k * W), Vector3.ZERO) * Data.base_xform(mk)
 	_batch_add(Data.mesh(mk), xf, c)
 
@@ -509,12 +529,13 @@ func stairs(bottom: Vector3, top: Vector3, width: float, c) -> void:
 		var p := bottom + dir * run * f
 		var hgt := rise * (i + 1) / n
 		_box_raw(Vector3(p.x, bottom.y + hgt * 0.5, p.z), Vector3(run / n + 0.02, hgt, width), _col(c).darkened(0.05 * (i % 2)), yaw, false, 0.02)
-		# 계단 몸통은 단단하게 — 옆 · 밑으로 통과하지 않게. 윗면은 경사판 아래(한 단 낮게)라 오를 때 덜컹거리지 않는다
-		var sh := rise * i / n
+		# 계단 몸통은 단단하게 — 옆 · 밑으로 통과하지 않게. 윗면은 경사판보다 낮아서 오를 때 덜컹거리지 않는다
+		var sh := rise * i / n - 0.3   # 단 앞 모서리에서도 경사판보다 낮게 (턱이 생겨 걸리지 않게)
 		if sh > 0.05:
 			_solid(Vector3(p.x, bottom.y + sh * 0.5, p.z), Vector3(run / n + 0.02, sh, width), yaw)
 	furn = false
-	_ramp(lvl_roots[lvl], bottom + Vector3(0, -0.12, 0) - dir * 0.3, top, width)
+	# 경사판 끝은 위층 바닥보다 살짝 높게 · 조금 앞까지 — 딱 맞춰 끝나면 둥근 몸이 바닥판 모서리에 걸려 옆으로 떨어졌다
+	_ramp(lvl_roots[lvl], bottom + Vector3(0, -0.12, 0) - dir * 0.3, top + Vector3(0, 0.06, 0) + dir * 0.1, width)
 	furn = true
 	links.append([bottom - dir * 0.6, top + dir * 0.7])
 
@@ -1455,6 +1476,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var looking := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and not bag_open:   # v0.6.3: 마우스를 움직이면 그냥 시점이 돈다 (우클릭 필요 없음)
+		if event.relative.length() > 1.5:
+			look_t = 0.0
 		cam_yaw -= event.relative.x * 0.0042 * Game.mouse_sens
 		cam_pitch = clampf(cam_pitch - event.relative.y * 0.0036 * Game.mouse_sens, -1.2, 0.25)
 	elif event is InputEventMouseButton and event.pressed:
@@ -1529,6 +1552,7 @@ func _drop_selected() -> void:
 func _process(delta: float) -> void:
 	if finished or not ready_done:
 		return
+	_auto_follow(delta)
 	_update_camera(delta)
 	_update_blobs()
 	# 큰 가구 · 조형물이 캐릭터를 가리면 그 부분만 작게 비친다 (벽은 카메라가 부딪혀서 해당 없음)
@@ -1538,6 +1562,22 @@ func _process(delta: float) -> void:
 
 
 var vis_pos := Vector3.ZERO
+var look_t := 99.0   # 마지막으로 마우스로 시점을 돌린 뒤 지난 시간
+
+## 시점 자동 따라가기: 걸으면 카메라가 캐릭터 등 뒤로 천천히 돈다 (마우스로 돌리면 잠깐 멈춤).
+## 뒤로 걸을 땐 돌지 않는다 — 카메라가 빙글 돌며 어지럽지 않게
+func _auto_follow(delta: float) -> void:
+	look_t += delta
+	var body: CharacterBody3D = actors[0]["body"]
+	var hv := Vector2(body.velocity.x, body.velocity.z)
+	if look_t < 0.6 or hv.length() < 1.0 or bag_open:
+		return
+	var cam_fwd := Vector2(-sin(cam_yaw), -cos(cam_yaw))
+	var fwd := hv.normalized().dot(cam_fwd)
+	if fwd < -0.3:
+		return
+	var k := clampf(fwd + 0.35, 0.0, 1.0) * clampf(hv.length() / SPEED, 0.0, 1.0)
+	cam_yaw = lerp_angle(cam_yaw, body.rotation.y, 1.0 - exp(-1.9 * k * delta))
 
 static var _blob_mat: StandardMaterial3D
 ## 발밑 그림자: 부드러운 검은 원 (바닥 · 가구 윗면에 붙는다)
@@ -1858,6 +1898,8 @@ func run_scenario(sc: String) -> void:
 		await get_tree().process_frame
 	time_left = 999.0
 	match sc:
+		"solids":
+			_scenario_solids()
 		"reach":
 			await _scenario_reach()
 		"navdbg":
@@ -1970,6 +2012,16 @@ func run_scenario(sc: String) -> void:
 				if a["bot"] and _envs(a).size() < 10:
 					var g: Dictionary = a["goal"]
 					print("[play] 느린 봇 %s @%s 목표 %s @%s wait=%.1f" % [Game.players[a["i"]]["name"], (a["body"] as Node3D).global_position.snapped(Vector3.ONE * 0.1), g["ref"]["name"] if not g.is_empty() else "-", ((g["ref"]["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)) if not g.is_empty() and is_instance_valid(g["ref"]["node"]) else Vector3.ZERO, float(a["wait"])])
+		"follow":
+			for i in 30:
+				await get_tree().physics_frame
+			for mv in [Vector2(0.7, -1.0), Vector2(0, 1.0)]:
+				var y0 := cam_yaw
+				sim_move = mv
+				for i in 240:
+					await get_tree().physics_frame
+				sim_move = Vector2.ZERO
+				print("[follow] 입력 %s: 카메라 %.2f → %.2f · 캐릭터 %.2f" % [str(mv), y0, cam_yaw, (actors[0]["body"] as Node3D).rotation.y])
 		"chars":
 			# 캐릭터 6명 근접 확인용
 			for i in 20:
@@ -2002,6 +2054,54 @@ func run_scenario(sc: String) -> void:
 			cam_yaw = 0.6
 			return
 	print("[scenario] done")
+	get_tree().quit()
+
+
+## 보이는 덩어리 중 충돌이 없는 것 (캐릭터가 통과하는 가구 찾기)
+func _scenario_solids() -> void:
+	var space := get_world_3d().direct_space_state
+	var seen := {}
+	var miss := 0
+	for r in audit:
+		var sz: Vector3 = r[0]
+		var xf: Transform3D = r[1]
+		var lvl_y := level_y(int(r[3]))
+		var wb := AABB(xf.origin, Vector3.ZERO)
+		# 걸어서 부딪힐 만한 것만: 두께 0.15 이상 · 높이 0.3 이상 · 발밑~머리 높이에 걸침
+		if minf(sz.x, minf(sz.y, sz.z)) < 0.15 or sz.y * absf(xf.basis.orthonormalized().y.y) < 0.3 and sz.y < 0.3:
+			continue
+		if xf.origin.y - sz.y * 0.5 > lvl_y + 2.0 or xf.origin.y + sz.y * 0.5 < lvl_y + 0.25:
+			continue
+		var q := PhysicsShapeQueryParameters3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = sz * 0.5
+		q.shape = bs
+		q.transform = Transform3D(xf.basis.orthonormalized(), xf.origin)
+		q.collision_mask = ALL_WORLD | L_PUSH | L_ITEM
+		if space.intersect_shape(q, 1).is_empty():
+			miss += 1
+			var key: String = r[2]
+			seen[key] = int(seen.get(key, 0)) + 1
+			if int(seen[key]) <= 2:
+				print("[solids] 통과: %s · 크기 %s @%s" % [key, str(sz.snapped(Vector3.ONE * 0.01)), str(xf.origin.snapped(Vector3.ONE * 0.1))])
+	print("[solids] %s: 덩어리 %d 중 통과 %d (코드 위치 %d곳)" % [Game.theme, audit.size(), miss, seen.size()])
+	# 여는 가구(서랍 · 문 · 뚜껑)는 보물층이라 캐릭터가 무시한다 — 바깥 몸체 충돌 안에 있는지
+	var cmiss := {}
+	for e in containers:
+		var pc: Piece = e["node"]
+		var gx := pc.mesh_inst.global_transform
+		var sz := pc.pscale * 0.5
+		if minf(sz.x, minf(sz.y, sz.z)) < 0.15 or gx.origin.y - sz.y * 0.5 > level_y(int(e["lvl"])) + 2.0:
+			continue
+		var q := PhysicsShapeQueryParameters3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = sz * 0.5
+		q.shape = bs
+		q.transform = Transform3D(gx.basis.orthonormalized(), gx.origin)
+		q.collision_mask = ALL_WORLD | L_PUSH
+		if space.intersect_shape(q, 1).is_empty():
+			cmiss[e["name"]] = int(cmiss.get(e["name"], 0)) + 1
+	print("[solids] %s: 여는 가구 %d 중 몸체 없음 %s" % [Game.theme, containers.size(), str(cmiss)])
 	get_tree().quit()
 
 
@@ -2042,7 +2142,11 @@ func _scenario_reach() -> void:
 				var cn := []
 				for ci in bb.get_slide_collision_count():
 					var kc := bb.get_slide_collision(ci)
-					cn.append("%s:%s" % [str(kc.get_normal().snapped(Vector3.ONE * 0.1)), (kc.get_collider() as Node).name])
+					var co := kc.get_collider() as CollisionObject3D
+					var shp := ""
+					if co.get_child_count() > 0 and co.get_child(0) is CollisionShape3D and (co.get_child(0) as CollisionShape3D).shape is BoxShape3D:
+						shp = str(((co.get_child(0) as CollisionShape3D).shape as BoxShape3D).size.snapped(Vector3.ONE * 0.01))
+					cn.append("%s:L%d@%s%s" % [str(kc.get_normal().snapped(Vector3.ONE * 0.1)), co.collision_layer, str(co.global_position.snapped(Vector3.ONE * 0.01)), shp])
 				trail.append("%s v%s %s" % [str(bb.global_position.snapped(Vector3.ONE * 0.1)), str(bb.velocity.snapped(Vector3.ONE * 0.1)), ",".join(cn)])
 		if not e["alive"]:
 			ok += 1

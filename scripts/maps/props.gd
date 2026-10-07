@@ -185,6 +185,7 @@ static func chest(h, p: Vector3, yaw: float, name := "보물상자") -> void:
 	for sx in [-0.3, 0.3]:
 		h.box(p + r * sx + Vector3(0, 0.25, 0), Vector3(0.07, 0.52, 0.57), 4, yaw, false, 0.01)
 	h.box(p + Vector3(0, 0.38, 0) + f * 0.28, Vector3(0.12, 0.14, 0.03), 4, yaw, false, 0.01)
+	h.block(p + Vector3(0, 0.56, 0), Vector3(0.9, 0.12, 0.55), yaw)   # 뚜껑 자리 (뚜껑은 보물층이라 캐릭터가 통과했다)
 	h.container("lid", p + Vector3(0, 0.56, 0), Vector3(0.92, 0.12, 0.57), yaw, 12, p + Vector3(0, 0.56, 0), name)
 
 
@@ -268,7 +269,7 @@ static func table(h, p: Vector3, yaw: float, size: Vector2, top_c, leg_c, spots_
 static func plant(h, p: Vector3) -> void:
 	h.obj(p)
 	h.cyl(p + Vector3(0, 0.22, 0), 0.22, 0.44, 3, true, 12, 0.5, 0.26)
-	h.ball(p + Vector3(0, 0.75, 0), 0.38, 6)
+	h.ball(p + Vector3(0, 0.75, 0), 0.38, 6, Vector3.ONE, true)
 	h.ball(p + Vector3(0.18, 0.95, 0.1), 0.24, 5)
 	h.spot(p + Vector3(0.35, 0.02, 0.3), "open")
 	h.end_obj()

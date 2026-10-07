@@ -67,22 +67,22 @@ static func _statue(h, p: Vector3, kind: int) -> void:
 		0:
 			h.box(p + Vector3(0, 0.45, 0), Vector3(0.42, 0.55, 0.26), Color("#F2EEE6"), 0.0, true, 0.08)
 			h.ball(p + Vector3(0, 0.92, 0), 0.17, Color("#F2EEE6"), Vector3(1, 1.15, 1))
-			h.box(p + Vector3(0, 0.1, 0), Vector3(0.36, 0.2, 0.22), Color("#F2EEE6"), 0.0, false, 0.04)
+			h.box(p + Vector3(0, 0.1, 0), Vector3(0.36, 0.2, 0.22), Color("#F2EEE6"), 0.0, true, 0.04)
 		1:
-			h.part("ring", 4, Color("#C9A24A"), p + Vector3(0, 0.45, 0), Vector3(0, 0, 0), 1.6)
-			h.part("sphere", 0, Color("#C9A24A"), p + Vector3(0, 0.15, 0), Vector3.ZERO, 0.5)
+			h.part("ring", 4, Color("#C9A24A"), p + Vector3(0, 0.45, 0), Vector3(0, 0, 0), 1.6, true)
+			h.part("sphere", 0, Color("#C9A24A"), p + Vector3(0, 0.15, 0), Vector3.ZERO, 0.5, true)
 		2:
-			h.part("cone", 3, Color("#B85C4A"), p + Vector3(0, 0.3, 0), Vector3(0, 30, 0), 1.1)
-			h.part("sphere", 3, Color("#3E6B9A"), p + Vector3(0, 0.75, 0), Vector3.ZERO, 0.6)
+			h.part("cone", 3, Color("#B85C4A"), p + Vector3(0, 0.3, 0), Vector3(0, 30, 0), 1.1, true)
+			h.part("sphere", 3, Color("#3E6B9A"), p + Vector3(0, 0.75, 0), Vector3.ZERO, 0.6, true)
 		3:
 			for k in 4:
-				h.part("box", 0, [Color("#E9C46A"), Color("#2A9D8F"), Color("#E76F51"), Color("#264653")][k], p + Vector3(0, 0.12 + k * 0.24, 0), Vector3(0, k * 22, 0), 0.9 - k * 0.14)
+				h.part("box", 0, [Color("#E9C46A"), Color("#2A9D8F"), Color("#E76F51"), Color("#264653")][k], p + Vector3(0, 0.12 + k * 0.24, 0), Vector3(0, k * 22, 0), 0.9 - k * 0.14, true)
 
 
 static func _hall(h) -> void:
 	# 가운데 큰 조각 + 원형 받침
 	h.cyl(Vector3(0, 0.25, 1.0), 1.4, 0.5, Color("#D6CFC4"), true, 24)
-	h.part("sphere", 0, Color("#E8E2D8"), Vector3(0, 1.4, 1.0), Vector3.ZERO, 2.2)
+	h.part("sphere", 0, Color("#E8E2D8"), Vector3(0, 1.4, 1.0), Vector3.ZERO, 2.2, true)
 	h.part("ring", 0, Color("#C9A24A"), Vector3(0, 1.4, 1.0), Vector3(90, 0, 30), 3.4)
 	h.spot(Vector3(1.1, 0.52, 1.6), "open")
 	# 받침대 + 조각 (홀 양쪽 줄)
@@ -170,6 +170,9 @@ static func _gallery_c(h) -> void:
 		_statue(h, p + Vector3(0, 0.86, 0), (k + 1) % 4)
 	# 큰 조형: 아치
 	h.part("ring", 4, Color("#E9C46A"), Vector3(13.5, 1.2, -1.0), Vector3.ZERO, 3.0)
+	# 아치 밑은 지나갈 수 있게 — 양 끝(머리 높이)만 막는다
+	for sx in [-1.0, 1.0]:
+		h.block(Vector3(13.5 + sx * 1.05, 0.95, -1.0), Vector3(0.4, 0.6, 0.6))
 	Props.bench(h, Vector3(13.5, 0, -8.5), PI, Color("#3F3A36"), Color("#3F3A36"))
 	h.spot(Vector3(19.2, 0.02, -12.2), "open")
 

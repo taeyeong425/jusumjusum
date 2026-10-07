@@ -121,11 +121,11 @@ static func _gym(h) -> void:
 	Props.crate(h, Vector3(12.0, 0, 18.5), 0.0, Vector3(1.4, 1.0, 0.7), 3, 0, "뜀틀")
 	h.cyl(Vector3(15.5, 0.4, 14.0), 0.5, 0.8, 14, true, 12, 0.6, 0.55)
 	for k in 5:
-		h.ball(Vector3(15.3 + (k % 3) * 0.25, 0.85 + (k / 3) * 0.2, 13.9 + (k % 2) * 0.2), 0.12, [3, 2, 0, 8, 6][k])
+		h.ball(Vector3(15.3 + (k % 3) * 0.25, 0.85 + (k / 3) * 0.2, 13.9 + (k % 2) * 0.2), 0.12, [3, 2, 0, 8, 6][k], Vector3.ONE, true)
 	for p in [Vector3(0.0, 0, 14.0), Vector3(2.0, 0, 13.6), Vector3(-10.0, 0, 22.0)]:
 		h.pushable(p, Vector3(0.8, 0.7, 0.8), Color("#C9A27A"), Game.rng.randf_range(-0.4, 0.4), 2.0)
 	for k in 6:
-		h.part("cone", 0, 3, Vector3(-8.0 + k * 1.6, 0.18, 20.0), Vector3.ZERO, 0.6)
+		h.part("cone", 0, 3, Vector3(-8.0 + k * 1.6, 0.18, 20.0), Vector3.ZERO, 0.6, true)
 	h.spot(Vector3(19.0, 0.02, 13.0), "open")
 	# 찰 수 있는 공들
 	for bp in [[Vector3(-2.0, 0, 18.0), 3], [Vector3(4.0, 0, 16.0), 0], [Vector3(10.0, 0, 20.0), 2], [Vector3(-8.0, 0, 14.5), 8], [Vector3(14.0, 0, 21.0), 3]]:
@@ -148,9 +148,9 @@ static func _classroom(h, x0: float, rng: RandomNumberGenerator) -> void:
 	# 교탁
 	h.obj(Vector3(cx, 0, -10.0))
 	Props.big_desk(h, Vector3(cx, 0, -10.0), PI, Color("#B88E64"), Color("#9C7552"), 13, "교탁 서랍")
-	h.part("sphere", 0, 8, Vector3(cx + 0.6, 1.15, -10.0), Vector3.ZERO, 0.55)
+	h.part("sphere", 0, 8, Vector3(cx + 0.6, 1.15, -10.0), Vector3.ZERO, 0.55, true)
 	h.part("ring", 2, 14, Vector3(cx + 0.6, 1.15, -10.0), Vector3(90, 0, -20), 0.6)
-	h.part("cylinder", 0, 12, Vector3(cx + 0.6, 0.92, -10.0), Vector3.ZERO, 0.4)
+	h.part("cylinder", 0, 12, Vector3(cx + 0.6, 0.92, -10.0), Vector3.ZERO, 0.4, true)
 	h.end_obj()
 	# 학생 책상 3×3
 	for row in 3:
@@ -184,7 +184,7 @@ static func _teachers(h) -> void:
 	h.obj(Vector3(10.6, 0, -3.1))
 	# 소파 · 탁자 · 정수기 · 책장
 	h.box(Vector3(10.6, 0.25, -3.3), Vector3(2.6, 0.5, 0.9), 9, 0.0, true, 0.12)
-	h.box(Vector3(10.6, 0.7, -2.85), Vector3(2.6, 0.6, 0.25), 9, 0.0, false, 0.1)
+	h.box(Vector3(10.6, 0.7, -2.85), Vector3(2.6, 0.6, 0.25), 9, 0.0, true, 0.1)
 	h.spot(Vector3(10.0, 0.52, -3.3), "open")
 	h.end_obj()
 	Props.table(h, Vector3(11.0, 0, -5.2), 0.0, Vector2(1.6, 0.8), Color("#C9A27A"), Color("#6E5743"), 1)
@@ -229,7 +229,7 @@ static func _music(h) -> void:
 	h.obj(pp)
 	h.box(pp + Vector3(0, 0.85, 0), Vector3(1.6, 0.35, 2.0), 15, 0.0, true, 0.1, 0.25)
 	for lp in [Vector3(-0.65, 0, -0.8), Vector3(0.65, 0, -0.8), Vector3(0, 0, 0.85)]:
-		h.box(pp + lp + Vector3(0, 0.34, 0), Vector3(0.12, 0.68, 0.12), 15, 0.0, false, 0.03)
+		h.box(pp + lp + Vector3(0, 0.34, 0), Vector3(0.12, 0.68, 0.12), 15, 0.0, true, 0.03)
 	h.box(pp + Vector3(0, 0.98, 1.05), Vector3(1.5, 0.08, 0.25), 0, 0.0, false, 0.01)
 	for k in 6:
 		h.box(pp + Vector3(-0.55 + k * 0.22, 1.03, 1.08), Vector3(0.08, 0.03, 0.12), 15, 0.0, false, 0.0)
@@ -282,8 +282,8 @@ static func _library(h, rng: RandomNumberGenerator) -> void:
 	h.box_span(Vector3(-1.05, 3.65, 7.05), Vector3(-1.05, 3.65, 8.5), 0.08, 0.08, Color("#8B6A4C"), true, 1.1)
 	h.box_span(Vector3(-1.05, 3.65, 10.4), Vector3(-1.05, 3.65, 12.0), 0.08, 0.08, Color("#8B6A4C"), true, 1.1)
 	# 다락 위: 빈백 · 작은 책장 · 망원경 · 보물 자리
-	h.part("potato", 0, 2, Vector3(-6.5, 2.95, 8.5), Vector3.ZERO, 1.6)
-	h.part("potato", 0, 8, Vector3(-5.0, 2.95, 10.6), Vector3.ZERO, 1.5)
+	h.part("potato", 0, 2, Vector3(-6.5, 2.95, 8.5), Vector3.ZERO, 1.6, true)
+	h.part("potato", 0, 8, Vector3(-5.0, 2.95, 10.6), Vector3.ZERO, 1.5, true)
 	Props.bookshelf(h, Vector3(-3.5, 2.6, 11.65), PI, 2.0, Color("#8B6A4C"), 2, true)
 	h.obj(Vector3(-7.3, 0, 11.0))
 	h.cyl_rot(Vector3(-7.2, 3.6, 11.0), 0.08, 1.0, 4, Vector3(0, 0, 50))
@@ -309,7 +309,7 @@ static func _art(h) -> void:
 	h.obj(Vector3(14.0, 0, 5.2))
 	Props.table(h, Vector3(14.0, 0, 5.2), 0.0, Vector2(3.0, 1.4), Color("#E8E2D6"), Color("#6E5743"), 3)
 	for k in 4:
-		h.cyl(Vector3(13.0 + k * 0.6, 0.9, 5.0), 0.1, 0.18, [2, 8, 4, 6][k], false, 10)
+		h.cyl(Vector3(13.0 + k * 0.6, 0.9, 5.0), 0.1, 0.18, [2, 8, 4, 6][k], true, 10)
 	h.end_obj()
 	h.box(Vector3(19.5, 0.45, 4.5), Vector3(0.8, 0.9, 1.6), 0, -PI / 2, true, 0.05)
 	h.box(Vector3(19.5, 0.92, 4.5), Vector3(0.6, 0.06, 1.2), Color("#9FB6C4"), -PI / 2, false, 0.03)
@@ -352,13 +352,13 @@ static func _second_floor(h) -> void:
 			var p := Vector3(-16.0 + k * 6.0, F2, -9.0 + j * 3.6)
 			Props.big_desk(h, p, 0.0, Color("#2F3B45"), Color("#E8E2D6"), 14, "실험대 서랍")
 			for b in 3:
-				h.cyl(p + Vector3(-0.6 + b * 0.5, 0.9, -0.1), 0.08, 0.22, [7, 5, 11][b], false, 10, 0.2)
+				h.cyl(p + Vector3(-0.6 + b * 0.5, 0.9, -0.1), 0.08, 0.22, [7, 5, 11][b], true, 10, 0.2)
 	Props.cabinet(h, Vector3(-19.4, F2, -5.0), PI / 2, 0, 7, "약품장")
 	Props.cabinet(h, Vector3(-6.0, F2, -11.6), 0.0, 0, 7, "약품장")
 	h.box(Vector3(-11.0, F2 + 0.45, -11.55), Vector3(2.4, 0.9, 0.7), 0, 0.0, true, 0.04)
 	h.box(Vector3(-11.0, F2 + 0.92, -11.55), Vector3(1.6, 0.06, 0.5), Color("#9FB6C4"), 0.0, false, 0.02)
 	h.ball(Vector3(-18.6, F2 + 1.65, -11.0), 0.16, 0, Vector3(1, 1.2, 1))
-	h.box(Vector3(-18.6, F2 + 1.1, -11.0), Vector3(0.18, 0.8, 0.1), 0, 0.0, false, 0.03)
+	h.box(Vector3(-18.6, F2 + 1.1, -11.0), Vector3(0.18, 0.8, 0.1), 0, 0.0, true, 0.03)
 	h.box(Vector3(-18.6, F2 + 0.4, -11.0), Vector3(0.04, 0.8, 0.04), 0, 0.0, false, 0.0)
 	h.spot(Vector3(-18.0, F2 + 0.02, -3.0), "open")
 	# 컴퓨터실 (x -4 ~ 10): 책상 줄 + 모니터 · 서버장(문) · 프린터(뚜껑)

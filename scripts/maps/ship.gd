@@ -91,7 +91,7 @@ static func _boathouse(h) -> void:
 		h.box_span(seg[0], seg[1], 0.06, 0.06, Color("#C9B48A"), true, 1.0)
 	for k in 12:
 		for z in [-8.0, 8.0]:
-			h.box(Vector3(-19.0 + k * 3.9, 0.45, z), Vector3(0.12, 0.9, 0.12), Color("#5E4128"), 0.0, false, 0.02)
+			h.box(Vector3(-19.0 + k * 3.9, 0.45, z), Vector3(0.12, 0.9, 0.12), Color("#5E4128"), 0.0, true, 0.02)
 	# 부두 가장자리 말뚝 · 테두리
 	for z in [-8.0, 8.0]:
 		h.box_span(Vector3(-19.0, 0.1, z), Vector3(24.0, 0.1, z), 0.2, 0.3, Color("#5E4128"))
@@ -161,12 +161,12 @@ static func _hold(h) -> void:
 	# 자루 · 대포알 더미
 	h.obj(Vector3(2.5, 0, 4.5))
 	for k in 4:
-		h.part("potato", 0, Color("#C9B48A"), Vector3(1.5 + k * 0.7, 0.35, 4.5), Vector3(0, k * 40, 0), 1.5)
+		h.part("potato", 0, Color("#C9B48A"), Vector3(1.5 + k * 0.7, 0.35, 4.5), Vector3(0, k * 40, 0), 1.5, true)
 	h.spot(Vector3(2.6, 0.02, 3.6), "open")
 	h.end_obj()
 	h.obj(Vector3(-0.7, 0, 4.6))
 	for k in 6:
-		h.ball(Vector3(-1.0 + (k % 3) * 0.32, 0.16 + (k / 3) * 0.26, 4.6 - (k / 3) * 0.0), 0.16, Color("#2B2B2B"))
+		h.ball(Vector3(-1.0 + (k % 3) * 0.32, 0.16 + (k / 3) * 0.26, 4.6 - (k / 3) * 0.0), 0.16, Color("#2B2B2B"), Vector3.ONE, true)
 	h.end_obj()
 	for lp in [Vector3(-12, 2.0, 0), Vector3(-4, 2.0, 2.5), Vector3(5, 2.0, -2.5), Vector3(11, 2.0, 1.5)]:
 		Props.lamp(h, lp, Color("#FFC27A"), 1.4, 8.0)
@@ -214,7 +214,7 @@ static func _deck(h) -> void:
 		h.part("ring", 2, Color("#C9B48A"), p + Vector3(0, 0.12, 0), Vector3.ZERO, 1.8)
 		h.spot(p + Vector3(0, 0.0, 0), "open")
 	# 갑판 → 뒷갑판 계단 (오른쪽 가장자리)
-	h.stairs(Vector3(-5.6, DECK_Y, 4.55), Vector3(-9.95, QD_Y, 4.55), 1.0, PLANK2)
+	h.stairs(Vector3(-5.6, DECK_Y, 4.55), Vector3(-9.8, QD_Y, 4.55), 1.0, PLANK2)   # 꼭대기 = 선장실 벽 바깥면 (벽 윗모서리가 턱이 되지 않게)
 	h.lv(0)
 
 
@@ -260,7 +260,7 @@ static func _quarterdeck(h) -> void:
 	Props.barrel(h, Vector3(-16.3, QD_Y, 4.5), 12, "물통")
 	# 깃대 + 해적 깃발
 	h.obj(Vector3(-16.6, 0, 0))
-	h.cyl(Vector3(-16.6, QD_Y + 2.2, 0), 0.08, 4.4, PLANK2, false, 8)
+	h.cyl(Vector3(-16.6, QD_Y + 2.2, 0), 0.08, 4.4, PLANK2, true, 8)
 	h.box_rot(Vector3(-15.8, QD_Y + 3.9, 0), Vector3(1.5, 1.0, 0.03), Color("#1B1B1B"), Vector3.ZERO)
 	h.part("sphere", 0, Color("#F3EBD8"), Vector3(-15.8, QD_Y + 4.0, 0.03), Vector3.ZERO, 0.4)
 	h.end_obj()
@@ -316,7 +316,7 @@ static func _gundeck(h) -> void:
 			if k % 2 == 1:
 				Props.barrel(h, cp + Vector3(1.4, 0, -side * 0.4), 15, "화약통")
 			else:
-				h.ball(cp + Vector3(1.2, 0.16, -side * 0.5), 0.16, Color("#2B2B2B"))
+				h.ball(cp + Vector3(1.2, 0.16, -side * 0.5), 0.16, Color("#2B2B2B"), Vector3.ONE, true)
 				h.spot(cp + Vector3(1.5, 0.02, -side * 0.9), "open")
 	# 해먹 (천장 들보에 매달림) · 식탁 · 의자
 	for k in 4:

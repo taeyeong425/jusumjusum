@@ -101,6 +101,31 @@ func _build_room() -> void:
 	_rb(Vector3(0, -0.5, 0), Vector3(TABLE * 2 + 0.1, 0.8, TABLE * 2 + 0.1), Color("#F1EEE8"), 0.03)
 	_rb(Vector3(0, -0.06, 0), Vector3(TABLE * 2 + 0.16, 0.12, TABLE * 2 + 0.16), Color("#2E2B29"), 0.02)
 	_rb(Vector3(0, -0.88, 0), Vector3(TABLE * 2 + 0.3, 0.06, TABLE * 2 + 0.3), Color("#D9D4CB"), 0.02)
+	# 펠트 위 옅은 격자 (30cm 칸 · 가운데 십자는 진하게) — 줄 맞추기 · 가운데 찾기
+	var gl := ArrayMesh.new()
+	var gv := PackedVector3Array()
+	var gc := PackedColorArray()
+	var gk := -TABLE
+	while gk <= TABLE + 0.001:
+		var a := 0.32 if absf(gk) < 0.01 else 0.12
+		for seg in [[Vector3(gk, 0.003, -TABLE), Vector3(gk, 0.003, TABLE)], [Vector3(-TABLE, 0.003, gk), Vector3(TABLE, 0.003, gk)]]:
+			gv.append(seg[0]); gv.append(seg[1])
+			gc.append(Color(1, 1, 1, a)); gc.append(Color(1, 1, 1, a))
+		gk += 0.3
+	var ga := []
+	ga.resize(Mesh.ARRAY_MAX)
+	ga[Mesh.ARRAY_VERTEX] = gv
+	ga[Mesh.ARRAY_COLOR] = gc
+	gl.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, ga)
+	var gmi := MeshInstance3D.new()
+	gmi.mesh = gl
+	var gm := StandardMaterial3D.new()
+	gm.vertex_color_use_as_albedo = true
+	gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	gm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gmi.material_override = gm
+	gmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(gmi)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	var cs := CollisionShape3D.new()
@@ -319,6 +344,12 @@ func _build_hud() -> void:
 	magnet_btn = UI.button("", _toggle_magnet, 18)
 	tools.add_child(magnet_btn)
 	_toggle_magnet(false)
+	rv.add_child(UI.label("시점 (Tab)", 18, UI.INK, true))
+	var vrow := UI.hbox(4)
+	rv.add_child(vrow)
+	for vi in VIEWS.size():
+		var v_i := vi
+		vrow.add_child(UI.button(str(VIEWS[vi][0]).replace("에서", "").replace("히", ""), func(): _set_view(v_i), 15))
 	hud_sel = UI.label("", 18, UI.SOFT)
 	hud_sel.custom_minimum_size.x = 220
 	hud_sel.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -329,7 +360,7 @@ func _build_hud() -> void:
 	var bottom := UI.panel()
 	var bv := UI.hbox(14)
 	bottom.add_child(bv)
-	bv.add_child(UI.label("덩어리 끌기 = 옮기기 (공중 · 겹치기 OK) · 끄는 중 휠 / Shift+끌기 / R·V = 높이 · G = 바닥에 붙이기\n색 고리 = 그 축으로 회전 · 색 네모 = 그 방향으로 늘이기 · 크기 = 전체 · M = 자석 맞춤 · 빈 곳 끌기 = 시점", 17, UI.SOFT))
+	bv.add_child(UI.label("덩어리 끌기 = 옮기기 · 방향키 = 조금씩 (Shift 크게) · 휠 / PageUp·Down / R·V = 높이 · G = 바닥에 붙이기\n색 고리 = 회전 · 색 네모 = 늘이기 · M = 자석 · Tab = 앞/옆/위 시점 · 빈 곳 끌기 = 시점 돌리기", 17, UI.SOFT))
 	bv.add_child(UI.primary("다 했다 →", _finish, 26))
 	layer.add_child(bottom)
 	UI.corner(bottom, Control.PRESET_CENTER_BOTTOM, Vector2(0, 12))
@@ -948,6 +979,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_WHEEL_DOWN:
 				if not _wheel_height(-0.04):
 					dist_t = minf(10.0, dist_t * 1.12)
+	elif event is InputEventKey and event.pressed and (event as InputEventKey).physical_keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_PAGEUP, KEY_PAGEDOWN]:
+		_nudge(event as InputEventKey)   # 꾹 누르면 계속
 	elif event is InputEventKey and event.pressed and not event.echo:
 		_key(event as InputEventKey)
 
@@ -1104,6 +1137,7 @@ func _key(k: InputEventKey) -> void:
 				var c2: Vector3 = anim.get(selected, selected.position)
 				anim[selected] = c2 - Vector3(0, 0.05, 0)
 		KEY_M: _toggle_magnet()
+		KEY_TAB: _next_view()
 		KEY_Z:
 			if ctrl:
 				if k.shift_pressed: _redo()
@@ -1117,6 +1151,92 @@ func _key(k: InputEventKey) -> void:
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
 			_apply_color(k.physical_keycode - KEY_1)
 		KEY_0: _apply_color(9)
+
+
+## 방향키 = 고른 덩어리를 화면 기준으로 조금씩 (Shift = 크게) · PageUp/Down = 높이
+func _nudge(k: InputEventKey) -> void:
+	if not selected or ceremony:
+		return
+	var step := 0.2 if k.shift_pressed else 0.05
+	var fwd := -cam.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	var rt := Vector3(-fwd.z, 0, fwd.x)
+	var d := Vector3.ZERO
+	match k.physical_keycode:
+		KEY_UP: d = fwd
+		KEY_DOWN: d = -fwd
+		KEY_LEFT: d = -rt
+		KEY_RIGHT: d = rt
+		KEY_PAGEUP: d = Vector3.UP
+		KEY_PAGEDOWN: d = Vector3.DOWN
+	if not k.echo:
+		_push_undo()
+	var c: Vector3 = anim.get(selected, selected.position)
+	var n := c + d * step
+	n.x = clampf(n.x, -TABLE, TABLE)
+	n.z = clampf(n.z, -TABLE, TABLE)
+	n.y = maxf(n.y, -0.2)
+	anim[selected] = n
+
+
+## 시점 바로가기: 앞 · 옆 · 위 · 비스듬 (Tab = 다음)
+const VIEWS := [["앞에서", 0.0, -0.12], ["옆에서", PI / 2, -0.12], ["위에서", 0.0, -1.45], ["비스듬히", 0.55, -0.5]]
+var view_i := 3
+func _set_view(i: int) -> void:
+	view_i = i
+	spin = false
+	yaw_t = float(VIEWS[i][1])
+	pitch_t = float(VIEWS[i][2])
+	center_t = Vector3(0, 0.5, 0) if not selected else Vector3(0, selected.global_position.y, 0)
+	_note("시점: " + str(VIEWS[i][0]))
+
+
+func _next_view() -> void:
+	_set_view((view_i + 1) % VIEWS.size())
+
+
+## 고른 덩어리 바로 아래 표면에 그림자 — 공중 높이 · 앞뒤 위치가 한눈에
+var sel_shadow: MeshInstance3D
+func _update_sel_shadow() -> void:
+	if sel_shadow == null:
+		sel_shadow = MeshInstance3D.new()
+		var q := PlaneMesh.new()
+		q.size = Vector2(1, 1)
+		sel_shadow.mesh = q
+		var g := Gradient.new()
+		g.set_color(0, Color(0, 0, 0, 0.5))
+		g.set_color(1, Color(0, 0, 0, 0.0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = tex
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		sel_shadow.material_override = m
+		sel_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(sel_shadow)
+	if not selected or not is_instance_valid(selected):
+		sel_shadow.visible = false
+		return
+	var p := selected.global_position
+	var q := PhysicsRayQueryParameters3D.create(p, p + Vector3(0, -4, 0), 1 | Piece.LAYER_PIECE)
+	if selected.body:
+		q.exclude = [selected.body.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		sel_shadow.visible = false
+		return
+	var hp: Vector3 = hit["position"]
+	var gap := p.y - hp.y
+	sel_shadow.visible = gap > 0.05
+	sel_shadow.global_position = hp + Vector3(0, 0.004, 0)
+	var r := maxf(selected.pscale.x, selected.pscale.z) * 0.5 * clampf(1.2 - gap * 0.3, 0.5, 1.2)
+	sel_shadow.scale = Vector3(r, 1, r)
 
 
 # ── 진행 ─────────────────────────────────────────────
@@ -1150,6 +1270,7 @@ func _process(delta: float) -> void:
 			(p as Piece).position = t
 			anim.erase(p)
 	snap_t -= delta
+	_update_sel_shadow()
 	overlay.queue_redraw()
 	hud_time.text = UI.clock(time_left)
 	hud_time.add_theme_color_override("font_color", UI.BAD if time_left < 30 else UI.INK)
@@ -1236,6 +1357,22 @@ func run_scenario(_sc: String) -> void:
 	var b2 := Piece.from_dict(d)
 	print("[build] 저장/복원 stretch=%s" % str(b2.stretch))
 	b2.free()
+	# 방향키 미세 이동
+	b.set_stretch(0, 1.0)
+	b.position = Vector3(0, 1.0, 0)
+	anim.erase(b)
+	_select(b)
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_RIGHT
+	ev.pressed = true
+	for i in 4:
+		_nudge(ev)
+	ev.physical_keycode = KEY_PAGEUP
+	_nudge(ev)
+	print("[build] 방향키 → ×4 · PageUp: 목표 %s" % str((anim[b] as Vector3).snapped(Vector3.ONE * 0.01)))
+	if OS.get_cmdline_user_args().has("--keep"):   # 화면 확인용: 떠 있는 덩어리 + 그림자 + 격자
+		_set_view(3)
+		return
 	print("[scenario] done")
 	get_tree().quit()
 
