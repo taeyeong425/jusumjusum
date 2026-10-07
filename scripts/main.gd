@@ -27,6 +27,29 @@ func _ready() -> void:
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
 			print("[bench] ", info)
+			var cnt := {}
+			var stack: Array = [current]
+			while not stack.is_empty():
+				var n: Node = stack.pop_back()
+				for c in n.get_children():
+					stack.append(c)
+				if n is MeshInstance3D or n is MultiMeshInstance3D:
+					var key := "기타"
+					var q: Node = n
+					while q and q != current:
+						if q is Piece and (q as Piece).has_meta("entry"):
+							key = "보물·가구 " + str((q as Piece).get_meta("entry").get("kind", "?"))
+							break
+						if q is CharacterBody3D:
+							key = "캐릭터"
+							break
+						if q is RigidBody3D:
+							key = "밀기·공"
+							break
+						q = q.get_parent()
+					var passes := 2 if ((n as GeometryInstance3D).material_override and (n as GeometryInstance3D).material_override.next_pass) else 1
+					cnt[key] = int(cnt.get(key, 0)) + passes
+			print("[bench] 그리기 후보(패스 포함): ", cnt)
 			get_tree().quit())
 	elif _arg("--scenario=") != "":
 		var sc := _arg("--scenario=")

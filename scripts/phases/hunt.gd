@@ -703,6 +703,14 @@ func _add_treasure(tier: String, pos: Vector3, level: int, parts: Array, box_e: 
 	if tier == "note":
 		pc.rotation.z = Game.rng.randf_range(-0.08, 0.08)
 	lvl_roots[level].add_child(pc)
+	# 최적화: 작은 보물은 30m 밖에선 안 그린다 (어차피 점 하나, 벽 너머 다른 방 것도 그리고 있었다)
+	var gs: Array = [pc]
+	while not gs.is_empty():
+		var g: Node = gs.pop_back()
+		gs.append_array(g.get_children())
+		if g is GeometryInstance3D:
+			(g as GeometryInstance3D).visibility_range_end = 30.0
+			(g as GeometryInstance3D).visibility_range_end_margin = 2.0
 	var e := {"kind": "treasure", "tier": tier, "node": pc, "parts": parts, "alive": true,
 		"hidden": not box_e.is_empty(), "lvl": level, "name": Themes.TIERS[tier][0], "from_box": not box_e.is_empty()}
 	pc.set_meta("entry", e)
@@ -945,7 +953,7 @@ func _path_dir(a: Dictionary, delta: float) -> Vector3:
 	a["pt"] = float(a.get("pt", 0.0)) - delta
 	while int(a.get("pi", 0)) < path.size():
 		var w: Vector3 = path[int(a["pi"])]
-		a["climb_ok"] = w.y > body.global_position.y + 0.5   # 사다리는 길이 위로 갈 때만 오른다
+		a["climb_ok"] = w.y > body.global_position.y + 0.1   # 사다리는 길이 위로 갈 때만 오른다 (0.5였더니 꼭대기 바로 밑에서 멈췄다)
 		# 다음 지점이 훨씬 위(사다리 꼭대기)면, 그 사다리 밑으로 먼저 간다 — 지나쳐서 밑에 끼지 않게
 		if w.y > body.global_position.y + 1.4:
 			for l in ladders:
@@ -979,7 +987,7 @@ func _ladder_near(body: CharacterBody3D) -> Dictionary:
 	var p := body.global_position
 	for l in ladders:
 		var lp: Vector2 = l["pos"]
-		if Vector2(p.x, p.z).distance_to(lp) < 0.75 and p.y > float(l["y0"]) - 0.3 and p.y < float(l["y1"]) + 0.05:
+		if Vector2(p.x, p.z).distance_to(lp) < 0.75 and p.y > float(l["y0"]) - 0.3 and p.y < float(l["y1"]) + 0.4:
 			return l
 	return {}
 
@@ -1956,6 +1964,22 @@ func run_scenario(sc: String) -> void:
 				if a["bot"] and _envs(a).size() < 10:
 					var g: Dictionary = a["goal"]
 					print("[play] 느린 봇 %s @%s 목표 %s @%s wait=%.1f" % [Game.players[a["i"]]["name"], (a["body"] as Node3D).global_position.snapped(Vector3.ONE * 0.1), g["ref"]["name"] if not g.is_empty() else "-", ((g["ref"]["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)) if not g.is_empty() and is_instance_valid(g["ref"]["node"]) else Vector3.ZERO, float(a["wait"])])
+		"chars":
+			# 캐릭터 6명 근접 확인용
+			for i in 20:
+				await get_tree().physics_frame
+			ready_done = false
+			var c0: Vector3 = (actors[0]["body"] as Node3D).global_position
+			for k in actors.size():
+				var b: CharacterBody3D = actors[k]["body"]
+				b.global_position = c0 + Vector3((k - 2.5) * 0.9, 0, 0)
+				b.rotation.y = 0.0
+				(actors[k]["vis"] as Node3D).rotation.y = 0.0 + (0.5 if OS.get_cmdline_user_args().has("--side") else 0.0)
+			cam_pivot.global_position = c0 + Vector3(0, 1.1, -4.0)
+			cam_pivot.rotation = Vector3(-0.15, PI, 0)
+			spring.spring_length = 0.0
+			cam.position = Vector3.ZERO
+			return
 		"look":
 			for i in 25:
 				await get_tree().physics_frame
@@ -1985,6 +2009,10 @@ func _scenario_reach() -> void:
 	for e in containers:
 		pool.append(e)
 	pool.shuffle()
+	for s in OS.get_cmdline_user_args():
+		if s.begins_with("--lvl="):   # 특정 층 목표만 (막힘 재현용)
+			var want := int(s.substr(6))
+			pool = pool.filter(func(e): return int(e["lvl"]) == want)
 	var ok := 0
 	var stuck := []
 	var times := []
@@ -1996,9 +2024,17 @@ func _scenario_reach() -> void:
 			_envs(me).clear()
 		act = e
 		var t := 0.0
+		var trail := []
 		while e["alive"] and t < 25.0 and not act.is_empty():
 			await get_tree().physics_frame
 			t += 1.0 / 60.0
+			if int(t * 60) % 30 == 0:
+				var bb: CharacterBody3D = me["body"]
+				var cn := []
+				for ci in bb.get_slide_collision_count():
+					var kc := bb.get_slide_collision(ci)
+					cn.append("%s:%s" % [str(kc.get_normal().snapped(Vector3.ONE * 0.1)), (kc.get_collider() as Node).name])
+				trail.append("%s v%s %s" % [str(bb.global_position.snapped(Vector3.ONE * 0.1)), str(bb.velocity.snapped(Vector3.ONE * 0.1)), ",".join(cn)])
 		if not e["alive"]:
 			ok += 1
 			times.append(t)
@@ -2009,6 +2045,7 @@ func _scenario_reach() -> void:
 			for q in pth:
 				ps.append(str(q.snapped(Vector3.ONE * 0.5)))
 			print("[path] ", e["name"], " pi=", me.get("pi", -1), " ", ", ".join(ps.slice(0, 40)))
+			print("[trail] ", " ".join(trail.slice(-16)))
 			stuck.append("%s L%d @%s (나 %s)" % [e["name"], e["lvl"], str((e["node"] as Node3D).global_position.snapped(Vector3.ONE * 0.1)), str(b.global_position.snapped(Vector3.ONE * 0.1))])
 			_cancel_act()
 	times.sort()
@@ -2053,6 +2090,10 @@ func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, slide := false)
 	obstacles.append([Vector2(g.origin.x, g.origin.z), Vector2(absf(d.x) + width, absf(d.z) + width) * 0.5, -parent.rotation.y])
 	return body
 
+
+## 모자 · 머리털 반구: 머리(반지름 ≈0.285)보다 넉넉히 크고 높게 — 작으면 정수리가 뚫고 나와 겹쳐 보였다
+const HAT := Vector3(1.08, 1.0, 1.08)
+const HAT_Y := 0.21
 
 func _character(i: int) -> Node3D:
 	# 작은 탐험가: 다리 · 팔은 따로 움직이는 관절(걸으면 흔든다) · 몸통 · 배낭 · 머리. 동물 친구는 귀 · 부리
@@ -2104,27 +2145,91 @@ func _character(i: int) -> Node3D:
 	add.call(head, "box", Vector3(0.14, 0.03, 0.03), Color("#7A4A3A"), Vector3(0, -0.1, -0.265))
 	match p["name"]:
 		"나":
-			add.call(head, "hemi", Vector3(1.0, 0.7, 1.0), 8, Vector3(0, 0.1, 0.01))
-			add.call(head, "plate", Vector3(0.42, 0.6, 0.5), 8, Vector3(0, 0.08, -0.27))
+			add.call(head, "hemi", HAT, 8, Vector3(0, HAT_Y, 0.01))
+			add.call(head, "plate", Vector3(0.5, 0.7, 0.5), 8, Vector3(0, 0.085, -0.31), Vector3(10, 0, 0))   # 챙
 		"곰돌이":
 			for s in [-1, 1]:
-				add.call(head, "sphere", Vector3(0.3, 0.3, 0.2), 12, Vector3(s * 0.2, 0.24, 0))
-			add.call(head, "hemi", Vector3(1.0, 0.6, 1.0), 12, Vector3(0, 0.1, 0.02))
+				add.call(head, "sphere", Vector3(0.3, 0.3, 0.2), 12, Vector3(s * 0.21, 0.31, 0.02))
+			add.call(head, "hemi", HAT, 12, Vector3(0, HAT_Y, 0.02))
 		"토끼":
 			for s in [-1, 1]:
-				add.call(head, "capsule", Vector3(0.6, 0.85, 0.5), 0, Vector3(s * 0.1, 0.42, 0.02), Vector3(0, 0, s * -8))
+				add.call(head, "capsule", Vector3(0.6, 0.85, 0.5), 0, Vector3(s * 0.1, 0.5, 0.02), Vector3(0, 0, s * -8))
 		"펭귄":
-			add.call(head, "hemi", Vector3(1.0, 0.75, 1.0), 15, Vector3(0, 0.08, 0.02))
+			add.call(head, "hemi", HAT, 15, Vector3(0, HAT_Y, 0.02))
 			add.call(head, "cone", Vector3(0.28, 0.3, 0.28), 3, Vector3(0, -0.04, -0.3), Vector3(-90, 0, 0))
 		"여우":
 			for s in [-1, 1]:
-				add.call(head, "cone", Vector3(0.45, 0.55, 0.4), 3, Vector3(s * 0.15, 0.32, 0), Vector3(0, 0, s * -14))
-			add.call(head, "hemi", Vector3(1.0, 0.55, 1.0), 3, Vector3(0, 0.12, 0.03))
+				add.call(head, "cone", Vector3(0.45, 0.55, 0.4), 3, Vector3(s * 0.15, 0.4, 0.02), Vector3(0, 0, s * -14))
+			add.call(head, "hemi", HAT, 3, Vector3(0, HAT_Y, 0.02))
 		"고양이":
 			for s in [-1, 1]:
-				add.call(head, "cone", Vector3(0.38, 0.42, 0.36), 14, Vector3(s * 0.15, 0.3, 0), Vector3(0, 0, s * -14))
-			add.call(head, "hemi", Vector3(1.0, 0.55, 1.0), 14, Vector3(0, 0.12, 0.03))
+				add.call(head, "cone", Vector3(0.38, 0.42, 0.36), 14, Vector3(s * 0.15, 0.38, 0.02), Vector3(0, 0, s * -14))
+			add.call(head, "hemi", HAT, 14, Vector3(0, HAT_Y, 0.02))
+	_bake_parts(root)
+	for pv in root.get_children():
+		if not (pv is Piece):
+			_bake_parts(pv)
 	return root
+
+
+static var _char_mat: StandardMaterial3D
+## 최적화: 관절 하나에 붙은 덩어리들을 메시 하나로 합친다 (색은 꼭짓점 색).
+## 캐릭터 1명 ≈ 22덩어리 × (본체 + 외곽선) 44번 그리기 → 관절 5개 × 2 = 10번
+func _bake_parts(pivot: Node3D) -> void:
+	if _char_mat == null:
+		_char_mat = StandardMaterial3D.new()
+		_char_mat.vertex_color_use_as_albedo = true
+		_char_mat.roughness = 0.55
+		_char_mat.next_pass = Data.outline_material()
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	for ch in pivot.get_children():
+		if not (ch is Piece):
+			continue
+		var pc: Piece = ch
+		var mi: MeshInstance3D = pc.mesh_inst
+		var xf: Transform3D = pc.transform * pc.vis.transform * mi.transform
+		var nb := xf.basis.inverse().transposed()
+		var col := Color.WHITE
+		var mat := mi.material_override if mi.material_override else mi.get_active_material(0)
+		if mat is ShaderMaterial:
+			col = (mat as ShaderMaterial).get_shader_parameter("albedo")
+		elif mat is StandardMaterial3D:
+			col = (mat as StandardMaterial3D).albedo_color
+		for si in mi.mesh.get_surface_count():
+			var arr := mi.mesh.surface_get_arrays(si)
+			var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var n: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+			var ii = arr[Mesh.ARRAY_INDEX]
+			var base := verts.size()
+			for k in v.size():
+				verts.append(xf * v[k])
+				norms.append((nb * n[k]).normalized() if n.size() > k else Vector3.UP)
+				cols.append(col)
+			if ii == null or (ii as PackedInt32Array).is_empty():
+				for k in v.size():
+					idx.append(base + k)
+			else:
+				for k in (ii as PackedInt32Array):
+					idx.append(base + k)
+		pivot.remove_child(pc)
+		pc.queue_free()
+	if verts.is_empty():
+		return
+	var a := []
+	a.resize(Mesh.ARRAY_MAX)
+	a[Mesh.ARRAY_VERTEX] = verts
+	a[Mesh.ARRAY_NORMAL] = norms
+	a[Mesh.ARRAY_COLOR] = cols
+	a[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	var out := MeshInstance3D.new()
+	out.mesh = am
+	out.material_override = _char_mat
+	pivot.add_child(out)
 
 
 ## 걷기 · 숨쉬기 애니메이션 (관절 흔들기)
@@ -2217,13 +2322,16 @@ func _move_body(a: Dictionary, v: Vector3, delta: float, jump := false) -> void:
 		if Vector3(v.x, 0, v.z).dot(lf) > 0.25 and a.get("climb_ok", true):
 			climbing = true
 			a["ladder_fwd"] = lf
-			if body.global_position.y < float(lad["y1"]) - 0.35:
+			if body.global_position.y < float(lad["y1"]) + 0.12:
+				# 사다리 줄에 붙어서 오른다 (밧줄 사다리는 뒤에 벽이 없어서, 앞으로 밀면 떨어져 나갔다)
+				var lp: Vector2 = lad["pos"]
+				var hold := Vector3(lp.x, 0, lp.y) - lf * 0.3 - Vector3(body.global_position.x, 0, body.global_position.z)
 				vel.y = 3.8
-				vel.x = lf.x * 0.6
-				vel.z = lf.z * 0.6
+				vel.x = hold.x * 4.0 + lf.x * 0.15
+				vel.z = hold.z * 4.0 + lf.z * 0.15
 			else:
-				# 꼭대기: 판 위로 폴짝 올라선다
-				vel.y = 4.5
+				# 꼭대기: 발이 판 윗면을 넘은 뒤 앞으로 올라선다 (아래서 뛰면 판 모서리에 머리를 박았다)
+				vel.y = 1.2
 				vel.x = lf.x * 3.5
 				vel.z = lf.z * 3.5
 	if not body.is_on_floor() and not leapt and not climbing:
